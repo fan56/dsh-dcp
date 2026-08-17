@@ -106,11 +106,13 @@ test('static Config normalization keeps policy and dcp keys intact', () => {
     dedup: false,
     maxItems: 5,
     thresholdRatio: 0.7,
+    tokenEstimate: 'ascii',
     modelPolicies: [{ provider: 'p', model: 'm', retainRatio: 0.1 }],
   })
   assert.equal(resolved.dedup, false)
   assert.equal(resolved.maxItems, 5)
   assert.equal(resolved.thresholdRatio, 0.7)
+  assert.equal(resolved.tokenEstimate, 'ascii')
   assert.equal(resolved.modelPolicies[0].provider, 'p')
   assert.equal(resolved.modelPolicies[0].retainRatio, 0.1)
 })

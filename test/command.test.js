@@ -5,7 +5,7 @@ import { executeDcp } from '../lib/command.js'
 
 function mockEngine() {
   return {
-    dcp: { dedup: true, purgeErrors: true, maxItems: 10, maxItemChars: 200, maxSummaryTokens: 2048, language: 'en' },
+    dcp: { dedup: true, purgeErrors: true, maxItems: 10, maxItemChars: 200, maxSummaryTokens: 2048, language: 'en', tokenEstimate: 'cjk', protectedTools: [] },
     config: Object.freeze({ thresholdRatio: 0.8, retainRatio: 0.16 }),
     dcpStats: { compactions: 2, shadowedTokens: 1234, lastAt: null },
     pluginPath: '/x/dsh-dcp/lib/index.js',
@@ -45,6 +45,10 @@ test('/dcp set adjusts booleans, numbers, language, thresholdRatio', async () =>
   assert.equal(engine.dcp.maxItems, 5)
   await executeDcp(identityCtx(), invocation('set language zh'), engine, 'v')
   assert.equal(engine.dcp.language, 'zh')
+  await executeDcp(identityCtx(), invocation('set tokenEstimate ascii'), engine, 'v')
+  assert.equal(engine.dcp.tokenEstimate, 'ascii')
+  const badMode = await executeDcp(identityCtx(), invocation('set tokenEstimate auto'), engine, 'v')
+  assert.equal(badMode.kind, 'error')
   await executeDcp(identityCtx(), invocation('set thresholdRatio 0.7'), engine, 'v')
   assert.equal(engine.config.thresholdRatio, 0.7)
 })

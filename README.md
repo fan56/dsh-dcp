@@ -50,7 +50,8 @@ cd ~/github/dsh-dcp && npm install
   name: /Users/<you>/github/dsh-dcp/lib/index.js
   config:
     thresholdRatio: 0.7   # 中文场景建议 0.7（默认 0.8）
-    language: zh          # 摘要填充文案 en|zh（内容本身总是逐字保留）
+    language: zh          # 输出语言 en|zh：zh 额外启用中文报错/待办规则
+    # tokenEstimate: cjk  # 默认即 cjk：CJK 字符按 ~2 字符/token 计价
 ```
 
 ### dsh-dcp 自己的键
@@ -58,15 +59,27 @@ cd ~/github/dsh-dcp && npm install
 | 键 | 默认 | 说明 |
 |---|---|---|
 | `dedup` | `true` | 统计重复的工具调用（同名+同参），在 Critical Context 里标注"×N，保留最近结果" |
+| `protectedTools` | `['write', 'edit', 'apply_patch']` | 去重时跳过这些名字（子串匹配）的工具；设为 `[]` 可让所有工具参与去重 |
 | `purgeErrors` | `true` | 旧报错折叠为一条省略提示，只保留最近 `maxItems` 条 |
 | `maxItems` | `10` | 每个 section 最多条数 |
 | `maxItemChars` | `200` | 每条最长字符（超出截断加 `…`） |
 | `maxSummaryTokens` | `2048` | 摘要 token 预算（超出自动降级到更紧凑的格式） |
-| `language` | `en` | 填充文案语言；section 标题固定英文（对下游模型是结构锚点） |
+| `language` | `en` | 输出语言 `en`/`zh`。除填充文案外，`zh` 还启用**中文规则集**：识别中文报错关键词（找不到/失败/无法/拒绝/超时/崩溃…）和 `待办：` 标记；`en` 只用英文规则。section 标题固定英文（对下游模型是结构锚点） |
+| `tokenEstimate` | `cjk` | 摘要预算的 token 计价方式：`cjk`（默认）把 **CJK 字符**（中文汉字、日文假名、韩文谚文、全角标点——CJK 不止中文）按 **~2 字符/token** 计价，ASCII 按 4 字符/token；`ascii` 则与宿主 meter 完全一致，所有字符一律 4 字符/token |
 
 ### 继承自 compaction-basic 的键
 
 `thresholdRatio`（0.8）、`retainRatio`（0.16）、`retainTokens`、`compactionRetries`、`maxOverflowRetries`、`modelPolicies`、`auto` 等原样透传，语义见 [dsh-compaction-basic README](https://github.com/deepseek-ai/deepseek-harness/blob/master/packages/compaction/compaction-basic/README.md)。`summarizationProvider/Model/maxTokens` 只影响被替换掉的 LLM 摘要路径，保留只为配置兼容。
+
+## 中文场景
+
+dsh 的 host meter 对所有字符一律按 **4 字符/token** 计价，这对英文合理，对 CJK 却会低估约 2 倍（真实分词器对汉字/假名/谚文约 1~2 字符/token）。dsh-dcp 在**摘要预算**上不沿用这个启发式：
+
+- **预算计价（`tokenEstimate: cjk`，默认）**：CJK 字符按 ~2 字符/token、ASCII 按 4 字符/token。纯英文文本与宿主 meter 完全一致；CJK 会话里预算反映真实成本，摘要不会因"中文被按 4 字符/token 贱卖"而膨胀到超出真实预算，也不会被 45% 预算规则饿死
+- **中文规则集（`language: zh`）**：报错识别补充中文关键词（找不到/未找到/不存在/失败/错误/报错/异常/无法/拒绝/超时/崩溃/致命），待办识别补充 `待办：` 标记；`en` 模式只认英文规则
+- **内容逐字保留**：用户原话、文件路径、命令、报错串原样进入摘要，不做英文转写，中文信息零损耗
+
+一个**已知边界**：压缩**触发阈值**仍由宿主 meter 决定（在父类 `compactIfNeeded` 里，不在我们的 seam 内）。中文会话里宿主低估实际占用，阈值可能触发偏晚。补偿办法：把 `thresholdRatio` 调低到 `0.6~0.7`（或用 `modelPolicies` 按模型单独设），让压力检查提前；若仍频繁触发 context-overflow 恢复，再继续下调。
 
 ## 摘要长什么样
 
@@ -107,7 +120,7 @@ summarizeDeterministically()     纯代码：抽取 → 合并 prior checkpoint 
 ```
 
 - 压缩区间选择、`compaction/start → summary → end` 事件序、`surfaceOp: replace`、收敛校验（摘要必须小于被压区间）、`ManualCompactionError` 错误分类，全部由父类承担
-- 摘要预算 = `min(maxSummaryTokens, 45% × 被压区间)`，用宿主同一个 token meter 估算；超出时逐级降级（砍条数 → 丢空 section → terse 固定格式 → 硬截断），保证收敛校验通过
+- 摘要预算 = `min(maxSummaryTokens, 45% × 被压区间)`，按 `tokenEstimate` 计价（默认 cjk，对中文准确；对纯英文与宿主一致）；超出时逐级降级（砍条数 → 丢空 section → terse 固定格式 → 硬截断）。45% 的余量保证收敛校验（宿主按 4 字符/token 计价）总能通过
 - 挂载方式是 `cordis.patch.yml` 按 `id: compaction-basic` 覆盖 `name`，行 id 不变、仍留在原 isolate 组内，隔离语义不破坏
 
 ## 与参考对象的差异
@@ -119,19 +132,19 @@ summarizeDeterministically()     纯代码：抽取 → 合并 prior checkpoint 
 | 历史 | 不改 session，请求前换占位符 | 走官方 durable 替换事务（`surfaceOp: replace`） |
 | 摘要 | 模型生成技术摘要 | 确定性模板抽取，零 LLM 调用 |
 | 命令 | `/dcp` TUI 面板 + `/dcp-compress` | `/dcp`（status/compact/set） |
-| 配置 | `dcp.jsonc`（~30 键） | `cordis.patch.yml` config（6 个自有键） |
+| 配置 | `dcp.jsonc`（~30 键） | `cordis.patch.yml` config（8 个自有键） |
 
 ## 局限
 
 - 确定性抽取不"理解"代码：它保路径/命令/报错/待办/用户原话，但不做语义归纳。需要语义摘要的场景请继续用默认 `compaction-basic`
-- token 计量继承宿主 meter 的 4 字符/token 启发式（中文低估的痛点在宿主侧，见调研文档）
+- 摘要预算对中文已按真实密度计价（`tokenEstimate: cjk`）；但**压缩触发阈值**仍在宿主侧按 4 字符/token 计价，中文会话触发偏晚，需手动调低 `thresholdRatio`（见"中文场景"）
 - 依赖绝对路径挂载 + 本目录 `npm install`（私仓未发 npm）；`@deepseek-ai/*` 版本需与本机 dsh 一致（当前 `0.1.0-rc.6`，见 `package.json` 的 `overrides`）
 
 ## 开发
 
 ```bash
 npm install
-npm test        # node:test，27 个用例：config / summarizer / command / engine
+npm test        # node:test，35 个用例：config / summarizer / command / engine
 ```
 
 - `lib/index.js` — `DcpEngine`（挂载入口，default export）

@@ -25,6 +25,7 @@ test('resolveDcpConfig fills defaults and freezes', () => {
   assert.equal(resolved.maxItemChars, 200)
   assert.equal(resolved.maxSummaryTokens, 2048)
   assert.equal(resolved.language, 'en')
+  assert.deepEqual(resolved.protectedTools, ['write', 'edit', 'apply_patch'])
   assert.throws(() => { resolved.dedup = false }, /Cannot assign/)
 })
 
@@ -33,10 +34,18 @@ test('resolveDcpConfig validates types', () => {
   assert.throws(() => resolveDcpConfig({ language: 'fr' }), /language/)
   assert.throws(() => resolveDcpConfig({ maxItems: 0 }), /maxItems/)
   assert.throws(() => resolveDcpConfig({ maxItemChars: 1.5 }), /maxItemChars/)
+  assert.throws(() => resolveDcpConfig({ protectedTools: 'x' }), /protectedTools must be an array of non-empty strings/)
+  assert.throws(() => resolveDcpConfig({ protectedTools: [1] }), /protectedTools must be an array of non-empty strings/)
+})
+
+test('resolveDcpConfig defaults and validates tokenEstimate', () => {
+  assert.equal(resolveDcpConfig({}).tokenEstimate, 'cjk')
+  assert.equal(resolveDcpConfig({ tokenEstimate: 'ascii' }).tokenEstimate, 'ascii')
+  assert.throws(() => resolveDcpConfig({ tokenEstimate: 'auto' }), /tokenEstimate must be "cjk" or "ascii"/)
 })
 
 test('runtime settable keys are a closed documented set', () => {
   assert.deepEqual(Object.keys(RUNTIME_SETTABLE).sort(), [
-    'dedup', 'language', 'maxItemChars', 'maxItems', 'maxSummaryTokens', 'purgeErrors', 'thresholdRatio',
+    'dedup', 'language', 'maxItemChars', 'maxItems', 'maxSummaryTokens', 'purgeErrors', 'thresholdRatio', 'tokenEstimate',
   ])
 })

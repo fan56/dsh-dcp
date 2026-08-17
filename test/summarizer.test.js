@@ -6,6 +6,8 @@ import {
   extractFacts,
   composeSummary,
   summarizeDeterministically,
+  estimateTextTokens,
+  estimateMessageTokens,
   SECTIONS,
 } from '../lib/summarizer.js'
 
@@ -158,4 +160,122 @@ test('zh language switches filler text, keeps section anchors', () => {
   assert.ok(text.includes('（无）'))
   assert.ok(text.includes('## Primary Request and Intent'))
   assert.ok(text.includes('继续修 bug'))
+})
+
+/** Region with duplicate tool calls; which tools duplicate is selectable. */
+function duplicateRegion(duplicates = ['edit', 'search']) {
+  const messages = [user('Reproduce duplicate tool calls.')]
+  if (duplicates.includes('edit')) {
+    messages.push(
+      assistant([toolCall('p1', 'fs.edit', { file_path: '/app/src/a.ts' })]),
+      toolResult('p1', ['applied']),
+      assistant([toolCall('p2', 'fs.edit', { file_path: '/app/src/a.ts' })]),
+      toolResult('p2', ['applied']),
+    )
+  }
+  if (duplicates.includes('search')) {
+    messages.push(
+      assistant([toolCall('p3', 'fs.search', { pattern: 'needle', path: '/app/src' })]),
+      toolResult('p3', ['found 1 match']),
+      assistant([toolCall('p4', 'fs.search', { pattern: 'needle', path: '/app/src' })]),
+      toolResult('p4', ['found 1 match']),
+    )
+  }
+  return messages
+}
+
+test('protectedTools skips dedup note for write tools under default config', () => {
+  const facts = extractFacts(duplicateRegion())
+  const text = composeSummary(facts, { ...dcp, protectedTools: ['write', 'edit', 'apply_patch'] })
+  // fs.search duplicates still get annotated…
+  assert.ok(text.includes('ran 2x'))
+  // …while fs.edit duplicates are protected and get no dedup note
+  assert.ok(!text.includes('fs.edit('))
+})
+
+test('protectedTools suppresses dedup for a custom-matched tool name', () => {
+  const facts = extractFacts(duplicateRegion(['search']))
+  const text = composeSummary(facts, { ...dcp, protectedTools: ['search'] })
+  assert.ok(!text.includes('ran 2x'))
+  assert.ok(!text.includes('fs.edit('))
+})
+
+test('protectedTools [] restores dedup annotation for write tools', () => {
+  const facts = extractFacts(duplicateRegion(['edit']))
+  const text = composeSummary(facts, { ...dcp, protectedTools: [] })
+  assert.ok(text.includes('ran 2x'))
+  assert.ok(text.includes('fs.edit('))
+})
+
+test('estimateTextTokens prices CJK at ~2 chars/token and ASCII at 4', () => {
+  assert.equal(estimateTextTokens('你好世界'), 2)          // 4 CJK chars / 2
+  assert.equal(estimateTextTokens('abcdefgh'), 2)          // 8 ASCII / 4
+  assert.equal(estimateTextTokens('你好 world!'), 3)       // 2 CJK + 6 ASCII → ceil(1 + 1.5)
+  // ascii mode replicates the host meter exactly (flat 4 chars/token)
+  assert.equal(estimateTextTokens('你好世界', 'ascii'), 1)
+  assert.equal(estimateTextTokens('abcdefgh', 'ascii'), 2)
+  assert.equal(estimateTextTokens('abc', 'ascii'), 1)
+})
+
+test('estimateMessageTokens covers text, tool-call args, and tool results', () => {
+  const message = {
+    id: 'm', role: 'user',
+    content: [
+      { type: 'text', text: '你好' },
+      { type: 'tool-call', id: 'c', name: 'bash', arguments: '{"command":"测试"}' },
+      { type: 'tool-result', toolCallId: 'c', content: [{ type: 'text', text: '结果' }] },
+    ],
+    source: { kind: 'user' },
+  }
+  // CJK: 你好+测试+结果 = 6 CJK chars (3 tokens) + JSON/ASCII wrapper (~15 chars → 4 tokens)
+  assert.equal(estimateMessageTokens(message, 'cjk'), 7)
+  // host-style flat pricing: 21 chars total → ceil(21/4) = 6
+  assert.equal(estimateMessageTokens(message, 'ascii'), 6)
+})
+
+test('zh language enables Chinese error and todo rules; en ignores them', () => {
+  const msgs = [
+    { id: '0', role: 'user', content: [{ type: 'text', text: '部署失败了，帮我看看' }], source: { kind: 'user' } },
+    { id: '1', role: 'assistant', content: [{ type: 'text', text: '检查日志\n待办：写个复现脚本' }], source: { kind: 'model', provider: 'p', model: 'm' } },
+    { id: '2', role: 'assistant', content: [{ type: 'tool-call', id: 'c1', name: 'bash', arguments: '{"command":"cat log"}' }], source: { kind: 'model', provider: 'p', model: 'm' } },
+    { id: '3', role: 'user', content: [{ type: 'tool-result', toolCallId: 'c1', isError: false, content: [{ type: 'text', text: '找不到模块：build/out.js' }] }], source: { kind: 'tool', callId: 'c1' } },
+  ]
+  const zhFacts = extractFacts(msgs, 'zh')
+  assert.ok(zhFacts.errors.some((line) => line.includes('找不到模块')))
+  assert.ok(zhFacts.pendingTodos.includes('写个复现脚本'))
+  const enFacts = extractFacts(msgs, 'en')
+  assert.equal(enFacts.errors.length, 0)
+  assert.equal(enFacts.pendingTodos.length, 0)
+})
+
+test('tokenEstimate cjk keeps CJK summaries inside their real-token budget; ascii balloons', () => {
+  const intents = Array.from({ length: 40 }, (_, i) => ({
+    id: `u${i}`,
+    role: 'user',
+    content: [{ type: 'text', text: `第${i}号任务：请修复模块的登录重定向与角色权限配置问题，并补充单元测试` }],
+    source: { kind: 'user' },
+  }))
+  const filler = {
+    id: 'f',
+    role: 'user',
+    content: [{ type: 'tool-result', toolCallId: 'c', content: [{ type: 'text', text: 'lorem ipsum dolor sit amet consectetur adipiscing elit '.repeat(50) }] }],
+    source: { kind: 'tool', callId: 'c' },
+  }
+  const region = [...intents, filler]
+  const dcpCfg = { dedup: true, purgeErrors: true, maxItems: 100, maxItemChars: 200, maxSummaryTokens: 2048, language: 'zh', protectedTools: [] }
+  const cjk = summarizeDeterministically({ messages: region }, { ...dcpCfg, tokenEstimate: 'cjk' }).summary[0].text
+  const ascii = summarizeDeterministically({ messages: region }, { ...dcpCfg, tokenEstimate: 'ascii' }).summary[0].text
+
+  // the real-token budget the plugin promises to respect
+  const regionReal = region.reduce((sum, m) => sum + estimateMessageTokens(m, 'cjk'), 0)
+  const budgetReal = Math.min(2048, Math.floor(regionReal * 0.45))
+
+  // cjk mode keeps the summary within that budget…
+  assert.ok(estimateTextTokens(cjk, 'cjk') <= budgetReal + 1)
+  // …while ascii mode (host heuristic) underprices CJK and lets the summary balloon past it
+  assert.ok(estimateTextTokens(ascii, 'cjk') > estimateTextTokens(cjk, 'cjk'))
+  const bullets = (text) => (text.match(/- 第/g) ?? []).length
+  assert.ok(bullets(ascii) > bullets(cjk))
+  // both still carry the most recent intent
+  assert.ok(cjk.includes('第39号任务'))
 })
