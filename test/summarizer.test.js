@@ -248,6 +248,29 @@ test('zh language enables Chinese error and todo rules; en ignores them', () => 
   assert.equal(enFacts.pendingTodos.length, 0)
 })
 
+test('injected host context is skipped from intents', () => {
+  const msgs = [
+    user('hi'),
+    { id: 's', role: 'user', content: [{ type: 'text', text: 'Current runtime context. This snapshot supersedes earlier snapshots.' }], source: { kind: 'plugin', plugin: '@deepseek-ai/dsh-system-prompt', form: 'snapshot', sections: [] } },
+    { id: 'c', role: 'user', content: [{ type: 'text', text: '<system-reminder> skill catalog body' }], source: { kind: 'skill-catalog', form: 'catalog', entries: [] } },
+    { id: 'i', role: 'user', content: [{ type: 'text', text: '<system-reminder> AGENTS.md instructions body' }], source: { kind: 'agent-instructions', form: 'instructions', changes: [] } },
+    user('请修复主题'),
+  ]
+  const facts = extractFacts(msgs)
+  assert.deepEqual(facts.intents, ['hi', '请修复主题'])
+  assert.equal(facts.lastUserText, '请修复主题')
+})
+
+test('notice messages use the producer one-line summary as intent', () => {
+  const msgs = [
+    { id: 'n', role: 'user', content: [{ type: 'text', text: 'VERY long subagent closing message body that we do not want verbatim' }], source: { kind: 'subagent-settled', form: 'notice', summary: 'Background subagent abc failed before it finished.' } },
+    user('继续'),
+  ]
+  const facts = extractFacts(msgs)
+  assert.deepEqual(facts.intents, ['Background subagent abc failed before it finished.', '继续'])
+  assert.equal(facts.lastUserText, '继续')
+})
+
 test('tokenEstimate cjk keeps CJK summaries inside their real-token budget; ascii balloons', () => {
   const intents = Array.from({ length: 40 }, (_, i) => ({
     id: `u${i}`,
