@@ -1,0 +1,56 @@
+{
+  "name": "dsh-dcp",
+  "version": "0.1.0",
+  "description": "Deterministic context-pruning compaction backend for dsh (DeepSeek Harness) — zero-LLM summaries, /dcp command, works out of the box. Design references Opencode-DCP/opencode-dynamic-context-pruning.",
+  "type": "module",
+  "main": "lib/index.js",
+  "exports": {
+    ".": "./lib/index.js",
+    "./summarizer": "./lib/summarizer.js",
+    "./config": "./lib/config.js",
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "lib",
+    "README.md",
+    "LICENSE",
+    "cordis.patch.example.yml"
+  ],
+  "scripts": {
+    "test": "node --test"
+  },
+  "keywords": [
+    "dsh",
+    "deepseek-harness",
+    "dsh-plugin",
+    "compaction",
+    "context-pruning",
+    "dcp"
+  ],
+  "license": "MIT",
+  "dependencies": {
+    "@deepseek-ai/cordis": "^4.0.1",
+    "@deepseek-ai/dsh-agent": "0.1.0-rc.6",
+    "@deepseek-ai/dsh-brand": "0.1.0-rc.6",
+    "@deepseek-ai/dsh-commands": "0.1.0-rc.6",
+    "@deepseek-ai/dsh-compaction": "0.1.0-rc.6",
+    "@deepseek-ai/dsh-compaction-basic": "0.1.0-rc.6",
+    "@deepseek-ai/dsh-compaction-tool-result-pruner": "0.1.0-rc.6",
+    "@deepseek-ai/dsh-invariants": "0.1.0-rc.6",
+    "@deepseek-ai/dsh-llm": "0.1.0-rc.6",
+    "@deepseek-ai/dsh-session": "0.1.0-rc.6",
+    "@deepseek-ai/dsh-token-meter": "0.1.0-rc.6",
+    "@deepseek-ai/schemastery": "^3.18.1"
+  },
+  "overrides": {
+    "@deepseek-ai/dsh-agent": "0.1.0-rc.6",
+    "@deepseek-ai/dsh-brand": "0.1.0-rc.6",
+    "@deepseek-ai/dsh-commands": "0.1.0-rc.6",
+    "@deepseek-ai/dsh-compaction": "0.1.0-rc.6",
+    "@deepseek-ai/dsh-compaction-tool-result-pruner": "0.1.0-rc.6",
+    "@deepseek-ai/dsh-invariants": "0.1.0-rc.6",
+    "@deepseek-ai/dsh-llm": "0.1.0-rc.6",
+    "@deepseek-ai/dsh-session": "0.1.0-rc.6",
+    "@deepseek-ai/dsh-token-meter": "0.1.0-rc.6"
+  }
+}

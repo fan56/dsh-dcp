@@ -1,0 +1,19 @@
+# Example: mount dsh-dcp as the compaction backend.
+#
+# Append to ~/.dsh/cordis.patch.yml (home level, applies to every profile).
+# The row id stays `compaction-basic` (patch overrides by id), so the line
+# remains inside the standard preset's compaction isolate group and every
+# consumer (/compact, UI checkpoint card, pressure triggers) keeps working.
+#
+# `name` MUST be an absolute path to this checkout's entry file; relative
+# paths resolve against the loader's baseUrl and are easy to get wrong.
+- id: compaction-basic
+  name: /Users/CHANGE/ME/dsh-dcp/lib/index.js
+  config:
+    thresholdRatio: 0.7   # optional: trigger earlier for CJK-heavy sessions
+    language: zh          # optional: filler text language (content is verbatim)
+    # dedup: true         # optional: every dsh-dcp key may be omitted
+    # purgeErrors: true
+    # maxItems: 10
+    # maxItemChars: 200
+    # maxSummaryTokens: 2048
