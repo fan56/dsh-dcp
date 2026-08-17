@@ -147,6 +147,26 @@ npm install
 npm test        # node:test，35 个用例：config / summarizer / command / engine
 ```
 
+### 缓存对比脚本
+
+`scripts/compare.mjs` 用真实 dsh 会话日志（`~/.dsh/sessions/**/session.jsonl.zstd`）静态模拟 provider 前缀缓存，对比"不压缩"基线与 dcp 后端：
+
+```bash
+node scripts/compare.mjs <session.jsonl.zstd> [contextWindow] [thresholdRatio] [retainRatio] [language]
+```
+
+模拟的缓存模型与真实服务商一致：请求 N 的缓存命中 = 与请求 N-1 的最长公共 token 前缀；纯追加时上一请求是完整前缀（≈全命中），压缩把头部替换成新 checkpoint 后下一请求从冷开始。
+
+在两条真实会话（各约 18~19 万 token）上的结果（128k 窗口、0.8 阈值）：
+
+| 指标 | 基线 | dcp（1~2 次压缩） |
+|---|---|---|
+| 缓存命中率 | 99.6% / 99.1% | 99.1% / 98.8% |
+| 总输入 token | 4150 万 | 2100~2200 万（约减半） |
+| 每次压缩后的冷请求 | — | 约 1.1~2.1 万 token（任何后端都付） |
+
+结论：压缩让命中率下降不到 0.5 个百分点，绝对 miss 增加约等于每次压缩后那一个冷请求（~2 万 token），而这个代价是**所有压缩后端共有的**（头部替换导致新 checkpoint 无前缀可蹭）；同时总输入 token 减半。dcp 与官方 basic 的唯一差异在摘要大小与零 LLM 调用，不在缓存机制。
+
 - `lib/index.js` — `DcpEngine`（挂载入口，default export）
 - `lib/summarizer.js` — 确定性抽取与预算压缩（纯函数，可独立复用）
 - `lib/command.js` — `/dcp` 命令
