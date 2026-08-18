@@ -18,6 +18,7 @@
     "lib",
     "scripts",
     "README.md",
+    "README.en.md",
     "LICENSE",
     "cordis.patch.example.yml",
     "cordis.patch.yml"
