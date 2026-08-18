@@ -1,0 +1,16 @@
+# dsh-dcp bundle patch: mounts dsh-dcp as the compaction backend.
+#
+# Adding this package to a profile's bundles (dsh plugin add @aiwayds/dsh-dcp,
+# or listing it under dsh.profile.bundles) applies this patch automatically —
+# the default LLM summarizer (compaction-basic) is disabled and dsh-dcp is
+# inserted alongside it. Standalone use therefore needs NO manual
+# cordis.patch.yml editing.
+
+- id: compaction-basic
+  disabled: true
+- insert:
+    - id: dsh-dcp
+      name: '@aiwayds/dsh-dcp'
+      config:
+        thresholdRatio: 0.7
+        language: zh
