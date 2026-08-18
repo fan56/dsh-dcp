@@ -16,33 +16,37 @@ dsh 自带三层压缩里，`compaction-basic` 每次压缩都要付一次 LLM �
 
 ## 快速开始
 
-**用我们的 TUI（`dsh-tui-pi`）？什么都不用做。** `dsh-tui-pi` ≥ 0.4.2 依赖 `@aiwayds/dsh-dcp`，并在它自己的 `cordis.patch.yml` 里自动挂载（禁用 compaction-basic + 插入 dsh-dcp）：
+**推荐方式：`setup` 脚本安全挂载**（独立安装、不碰你已有的 `cordis.patch.yml` 内容）：
 
 ```bash
-npm i @aiwayds/dsh-tui-pi        # 重启 dsh 即可，dcp 开箱即用，无需手动配置
+npm i @aiwayds/dsh-dcp
+npx dsh-dcp-setup        # 自动：带日期备份 → 只追加挂载块 → 幂等判断 → 缺失则生成
 ```
 
-**独立使用（非 tui 环境）** —— npm 只把包装进 node_modules，**挂载（写 patch 条目）不在 npm 行为里**，除非宿主 bundle（如 dsh-tui-pi）自带挂载。不装 tui 就得手动写：
+脚本的行为：备份现有文件到 `cordis.patch.yml.bak.<日期>`；**只追加** dsh-dcp 的挂载块（你已有的条目和注释原样保留，不重写）；已挂载则跳过；已通过 bundle 装了 dcp 的 profile 会**拒绝重复挂载**（防止 loader 崩溃）；文件不存在则生成。可用 `--profile <name>` 指定某个 profile 的 patch，或传绝对路径。
+
+**用我们的 TUI（`dsh-tui-pi`）？** `dsh-tui-pi` 依赖 `@aiwayds/dsh-dcp`（latest），激活 dcp 只需把它加进 profile bundles：
 
 ```bash
-# 1. 安装
-npm i @aiwayds/dsh-dcp
-# 或源码：git clone git@github.com:fan56/dsh-dcp.git && cd dsh-dcp && npm install
+npm i @aiwayds/dsh-tui-pi
+dsh plugin add @aiwayds/dsh-dcp     # dcp 的 bundle patch 自动挂载
+```
 
-# 2. 手动挂载：在 ~/.dsh/cordis.patch.yml 追加
+**手动挂载**（等价于脚本做的，想自己控制时用）：
+
+```yaml
+# 追加到 ~/.dsh/cordis.patch.yml
 - id: compaction-basic
   disabled: true
 - insert:
     - id: dsh-dcp
-      name: '@aiwayds/dsh-dcp'        # 包装进 profile 后用裸包名即可（与 tui-pi 一致）
+      name: '@aiwayds/dsh-dcp'
       config:
         thresholdRatio: 0.7
         language: zh
-
-# 3. 重启 dsh，输入 /dcp 验证
 ```
 
-> 挂载名用**裸包名**（`@aiwayds/dsh-dcp`）即可——只要它装进了 profile 的 node_modules（`dsh plugin add` 或 profile package.json 依赖），loader 就能像解析 tui-pi 一样找到它；用**绝对路径**指向源码入口同样可行。
+> 三种方式选一即可，不要叠加（会重复 `id: dsh-dcp` 导致 loader 崩溃）。挂载名用**裸包名**（装进 profile 的 node_modules 即可，loader 与 tui-pi 同机制解析）或**绝对路径**都行。
 
 `/compact` 命令、自动压力触发、overflow 恢复、UI 的 checkpoint 卡片照常工作——它们只依赖 `ctx.compaction` 接口，与本后端无关。
 

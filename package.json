@@ -4,21 +4,27 @@
   "description": "Deterministic context-pruning compaction backend for dsh (DeepSeek Harness) — zero-LLM summaries, /dcp command, works out of the box. Design references Opencode-DCP/opencode-dynamic-context-pruning.",
   "type": "module",
   "main": "lib/index.js",
+  "bin": {
+    "dsh-dcp-setup": "scripts/setup.mjs"
+  },
   "exports": {
     ".": "./lib/index.js",
     "./summarizer": "./lib/summarizer.js",
     "./config": "./lib/config.js",
+    "./setup": "./lib/setup.js",
     "./package.json": "./package.json"
   },
   "files": [
     "lib",
+    "scripts",
     "README.md",
     "LICENSE",
     "cordis.patch.example.yml",
     "cordis.patch.yml"
   ],
   "scripts": {
-    "test": "node --test"
+    "test": "node --test",
+    "setup": "node scripts/setup.mjs"
   },
   "keywords": [
     "dsh",
