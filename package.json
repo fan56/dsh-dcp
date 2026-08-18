@@ -1,6 +1,6 @@
 {
-  "name": "dsh-dcp",
-  "version": "0.1.0",
+  "name": "@aiwayds/dsh-dcp",
+  "version": "0.1.1",
   "description": "Deterministic context-pruning compaction backend for dsh (DeepSeek Harness) — zero-LLM summaries, /dcp command, works out of the box. Design references Opencode-DCP/opencode-dynamic-context-pruning.",
   "type": "module",
   "main": "lib/index.js",
@@ -28,6 +28,17 @@
     "dcp"
   ],
   "license": "MIT",
+  "publishConfig": {
+    "access": "public"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/fan56/dsh-dcp.git"
+  },
+  "homepage": "https://github.com/fan56/dsh-dcp",
+  "bugs": {
+    "url": "https://github.com/fan56/dsh-dcp/issues"
+  },
   "dependencies": {
     "@deepseek-ai/cordis": "^4.0.1",
     "@deepseek-ai/dsh-agent": "0.1.0-rc.6",
