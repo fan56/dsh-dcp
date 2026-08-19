@@ -5,7 +5,7 @@ import { executeDcp } from '../lib/command.js'
 
 function mockEngine() {
   return {
-    dcp: { dedup: true, purgeErrors: true, maxItems: 10, maxItemChars: 200, maxSummaryTokens: 2048, language: 'en', tokenEstimate: 'cjk', protectedTools: [] },
+    dcp: { dedup: true, purgeErrors: true, maxItems: 10, maxItemChars: 200, maxSummaryTokens: 2048, language: 'en', tokenEstimate: 'cjk', protectedTools: [], roundInterval: 50, notice: true },
     config: Object.freeze({ thresholdRatio: 0.8, retainRatio: 0.16 }),
     dcpStats: { compactions: 2, shadowedTokens: 1234, lastAt: null },
     pluginPath: '/x/dsh-dcp/lib/index.js',
@@ -51,6 +51,24 @@ test('/dcp set adjusts booleans, numbers, language, thresholdRatio', async () =>
   assert.equal(badMode.kind, 'error')
   await executeDcp(identityCtx(), invocation('set thresholdRatio 0.7'), engine, 'v')
   assert.equal(engine.config.thresholdRatio, 0.7)
+})
+
+test('/dcp set adjusts roundInterval and notice', async () => {
+  const engine = mockEngine()
+  await executeDcp(identityCtx(), invocation('set roundInterval 100'), engine, 'v')
+  assert.equal(engine.dcp.roundInterval, 100)
+  const disable = await executeDcp(identityCtx(), invocation('set roundInterval 0'), engine, 'v')
+  assert.equal(disable.kind, 'success')
+  assert.ok(disable.text.includes('disabled'))
+  assert.equal(engine.dcp.roundInterval, 0)
+  const bad = await executeDcp(identityCtx(), invocation('set roundInterval -1'), engine, 'v')
+  assert.equal(bad.kind, 'error')
+  assert.ok(bad.text.includes('0 or a positive integer'))
+  await executeDcp(identityCtx(), invocation('set notice off'), engine, 'v')
+  assert.equal(engine.dcp.notice, false)
+  const status = await executeDcp(identityCtx(), invocation(''), engine, 'v')
+  assert.ok(status.text.includes('roundInterval=0'))
+  assert.ok(status.text.includes('notice=false'))
 })
 
 test('/dcp set rejects bad input and guards retainRatio', async () => {

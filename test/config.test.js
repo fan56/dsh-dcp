@@ -44,8 +44,20 @@ test('resolveDcpConfig defaults and validates tokenEstimate', () => {
   assert.throws(() => resolveDcpConfig({ tokenEstimate: 'auto' }), /tokenEstimate must be "cjk" or "ascii"/)
 })
 
+test('resolveDcpConfig defaults and validates roundInterval and notice', () => {
+  assert.equal(resolveDcpConfig({}).roundInterval, 50)
+  assert.equal(resolveDcpConfig({}).notice, true)
+  assert.equal(resolveDcpConfig({ roundInterval: 100 }).roundInterval, 100)
+  assert.equal(resolveDcpConfig({ roundInterval: 0 }).roundInterval, 0)
+  assert.throws(() => resolveDcpConfig({ roundInterval: -1 }), /roundInterval must be a non-negative integer/)
+  assert.throws(() => resolveDcpConfig({ roundInterval: 2.5 }), /roundInterval must be a non-negative integer/)
+  assert.throws(() => resolveDcpConfig({ roundInterval: '100' }), /roundInterval must be a non-negative integer/)
+  assert.equal(resolveDcpConfig({ notice: false }).notice, false)
+  assert.throws(() => resolveDcpConfig({ notice: 'no' }), /notice must be a boolean/)
+})
+
 test('runtime settable keys are a closed documented set', () => {
   assert.deepEqual(Object.keys(RUNTIME_SETTABLE).sort(), [
-    'dedup', 'language', 'maxItemChars', 'maxItems', 'maxSummaryTokens', 'purgeErrors', 'thresholdRatio', 'tokenEstimate',
+    'dedup', 'language', 'maxItemChars', 'maxItems', 'maxSummaryTokens', 'notice', 'purgeErrors', 'roundInterval', 'thresholdRatio', 'tokenEstimate',
   ])
 })

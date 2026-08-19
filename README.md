@@ -61,7 +61,7 @@ dsh 默认的压缩（`compaction-basic`）每次压缩都要让模型把旧对�
 - **不做语义归纳**：不"理解"代码，只保留"出现过的事实"。需要深度语义摘要的场景，请继续用官方 `compaction-basic`
 - **dsh 已经有的我们不重复做**：
   - 工具结果剪枝（`compaction-tool-result-pruner`，确定性按大小剪）
-  - 触发策略、保留尾巴、溢出恢复（直接继承官方）
+  - 触发策略、保留尾巴、溢出恢复（直接继承官方；本插件仅新增轮数触发，见上）
   - `/compact` 命令、UI 检查点卡片（dsh 自带）
 
 ## 安装
@@ -90,7 +90,19 @@ npx dsh-dcp-setup                   # 安全脚本：带日期备份 → 只追�
 | `/dcp compact` | 立即压缩（零 LLM） |
 | `/dcp set <k> <v>` | 会话内调参，并提示如何持久化 |
 
-可调键：`dedup`、`purgeErrors`、`maxItems`、`maxItemChars`、`maxSummaryTokens`、`language`、`tokenEstimate`、`thresholdRatio`。
+可调键：`dedup`、`purgeErrors`、`maxItems`、`maxItemChars`、`maxSummaryTokens`、`language`、`tokenEstimate`、`thresholdRatio`、`roundInterval`、`notice`。
+
+## 触发条件
+
+| 触发 | 时机 | 说明 |
+|---|---|---|
+| 压力触发 | 每步请求前 | token ≥ `thresholdRatio`（默认 0.7）× 上下文窗口，继承官方 |
+| 溢出恢复 | 模型报 context 超限时 | 继承官方 |
+| **轮数触发** | 会话每完成 `roundInterval` 轮 | 本插件新增；一轮 = 一次正常完成的 turn。**默认 50**：第 50 轮触发第一次，之后每 50 轮一次（100、150……）；任何一次压缩（含压力触发）都会重置轮数时钟。到达轮数后的第一个空闲点触发（阈值之下也压）。`0` 关闭；需保持 `auto: true`（默认开） |
+| 手动 | `/dcp compact`、`/compact` | 随时可用 |
+
+- **subagent 同样生效**：进程内 subagent（含 continuable 子代理）走同一套事件分发，压力/溢出/轮数触发对子会话独立计数、独立触发。
+- **压缩可见性**：每次压缩成功后，会话里追加一行 `dcp: 已压缩 N 条历史（约 X tokens，触发方式）` 通知行（前端渲染为折叠行）。注意该行也会作为上下文随请求发给模型（每次压缩约 15–25 tokens），且 **0.4.0 起默认开启**；`notice: false` 可关闭。`/dcp` 的 stats 持续累计（压力触发的多次 region 提交各计一次）。
 
 ## 配置
 
@@ -98,7 +110,9 @@ npx dsh-dcp-setup                   # 安全脚本：带日期备份 → 只追�
 
 | 键 | 默认 | 说明 |
 |---|---|---|
-| `thresholdRatio` | 0.7 | 触发阈值；中文场景建议 0.7 |
+| `thresholdRatio` | 0.7 | 压力触发阈值；中文场景建议 0.7 |
+| `roundInterval` | 50 | 每 N 轮触发一次压缩（0 关闭）。默认 50：50、100、150……每次压缩后重数 |
+| `notice` | `true` | 压缩后在会话中追加一行通知 |
 | `language` | `zh` | 摘要语言；`zh` 额外识别中文报错和"待办：" |
 | `tokenEstimate` | `cjk` | CJK（中/日/韩/全角）按 ~2 字符/token 计价；`ascii` 与宿主一致 |
 | `dedup` | `true` | 标注重复工具调用 |
@@ -114,7 +128,7 @@ npx dsh-dcp-setup                   # 安全脚本：带日期备份 → 只追�
 ## 开发
 
 ```bash
-npm install && npm test     # 45 个用例：抽取/压缩/命令/配置/安装脚本
+npm install && npm test     # 61 个用例：抽取/压缩/命令/配置/触发/安装脚本
 ```
 
 ## License

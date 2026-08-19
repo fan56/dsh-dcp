@@ -1,6 +1,6 @@
 {
   "name": "@aiwayds/dsh-dcp",
-  "version": "0.3.2",
+  "version": "0.4.0",
   "description": "Deterministic context-pruning compaction backend for dsh (DeepSeek Harness) — zero-LLM summaries, /dcp command, works out of the box. Design references Opencode-DCP/opencode-dynamic-context-pruning.",
   "type": "module",
   "main": "lib/index.js",
@@ -20,7 +20,6 @@
     "README.md",
     "README.en.md",
     "LICENSE",
-    "cordis.patch.example.yml",
     "cordis.patch.yml"
   ],
   "scripts": {

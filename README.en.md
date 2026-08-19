@@ -79,7 +79,7 @@ A checkpoint produced on a real session (Chinese content kept verbatim):
   `compaction-basic`
 - **Things dsh already does, deliberately not re-implemented**:
   - tool-result pruning (`compaction-tool-result-pruner`, deterministic by size)
-  - trigger policy, retained tail, overflow recovery (inherited from official)
+  - trigger policy, retained tail, overflow recovery (inherited from official; this plugin only adds the round-interval trigger, see below)
   - `/compact` command, UI checkpoint cards (shipped with dsh)
 
 ## Install
@@ -112,7 +112,20 @@ npx dsh-dcp-setup                   # safe: date-stamped backup → append-only 
 | `/dcp set <k> <v>` | adjust a knob for this session, with a persist hint |
 
 Settable: `dedup`, `purgeErrors`, `maxItems`, `maxItemChars`,
-`maxSummaryTokens`, `language`, `tokenEstimate`, `thresholdRatio`.
+`maxSummaryTokens`, `language`, `tokenEstimate`, `thresholdRatio`,
+`roundInterval`, `notice`.
+
+## Triggers
+
+| Trigger | When | Notes |
+|---|---|---|
+| Pressure | before every step | tokens ≥ `thresholdRatio` (default 0.7) × context window, inherited |
+| Overflow recovery | on a provider context-window error | inherited |
+| **Round interval** | every `roundInterval` completed turns | added by this plugin; one round = one successfully completed turn. **Default 50**: first compaction at turn 50, then every 50 more (100, 150, …); any compaction (pressure included) restarts the clock. Fires at the first idle boundary after the count is reached (below the pressure threshold too). `0` disables; requires the default `auto: true` |
+| Manual | `/dcp compact`, `/compact` | anytime |
+
+- **Subagents are covered**: in-process subagents (including continuable children) dispatch through the same events, so pressure/overflow/round triggers count and fire per child session independently.
+- **Visibility**: after every trigger event a one-line notice row (`dcp: compacted N history items (~X tokens, trigger)`) is appended to the session; frontends render it as a collapsed row. Note the row also rides the model request context (~15–25 tokens per compaction), and it is **on by default since 0.4.0** — disable with `notice: false`. `/dcp` stats count every committed region (a pressure retry loop may commit several).
 
 ## Configuration
 
@@ -120,7 +133,9 @@ All optional, defaults work out of the box:
 
 | Key | Default | Meaning |
 |---|---|---|
-| `thresholdRatio` | 0.7 | compaction trigger; 0.7 recommended for CJK-heavy sessions |
+| `thresholdRatio` | 0.7 | pressure trigger; 0.7 recommended for CJK-heavy sessions |
+| `roundInterval` | 50 | compact every N completed turns (0 disables). Default 50: 50, 100, 150… — the clock restarts after every compaction |
+| `notice` | `true` | append the one-line compaction notice to the session |
 | `language` | `zh` | summary language; `zh` also enables Chinese error/"待办：" detection |
 | `tokenEstimate` | `cjk` | CJK (zh/ja/ko/full-width) at ~2 chars/token; `ascii` matches the host |
 | `dedup` | `true` | annotate repeated tool calls |
@@ -136,7 +151,7 @@ All optional, defaults work out of the box:
 ## Development
 
 ```bash
-npm install && npm test     # 45 tests: extractor/compaction/command/config/setup
+npm install && npm test     # 61 tests: extractor/compaction/command/config/triggers/setup
 ```
 
 ## License

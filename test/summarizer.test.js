@@ -8,6 +8,7 @@ import {
   summarizeDeterministically,
   estimateTextTokens,
   estimateMessageTokens,
+  noticeText,
   SECTIONS,
 } from '../lib/summarizer.js'
 
@@ -301,4 +302,23 @@ test('tokenEstimate cjk keeps CJK summaries inside their real-token budget; asci
   assert.ok(bullets(ascii) > bullets(cjk))
   // both still carry the most recent intent
   assert.ok(cjk.includes('第39号任务'))
+})
+
+test('extractFacts ignores dsh-dcp notice rows; noticeText stays bounded-shape', () => {
+  const messages = [
+    { id: 'u1', role: 'user', content: [{ type: 'text', text: '修一下CI' }], source: { kind: 'user' } },
+    {
+      id: 'n1', role: 'user',
+      content: [{ type: 'text', text: 'dcp: 已压缩 87 条历史（约 23456 tokens，auto）' }],
+      source: { kind: 'plugin', plugin: 'dsh-dcp', form: 'notice', summary: 'dcp: 已压缩 87 条历史（约 23456 tokens，auto）' },
+    },
+  ]
+  const facts = extractFacts(messages, 'zh')
+  assert.deepEqual(facts.intents, ['修一下CI'])
+
+  const en = noticeText('en', 87, 23456, 'auto')
+  const zh = noticeText('zh', 87, 23456, 'round')
+  assert.ok(en.includes('87') && en.includes('23456') && en.includes('auto'))
+  assert.ok(zh.includes('已压缩') && zh.includes('round'))
+  assert.equal(noticeText('zh', 1, 2), 'dcp: 已压缩 1 条历史（约 2 tokens，auto）')
 })
