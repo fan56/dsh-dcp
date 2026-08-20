@@ -1,6 +1,6 @@
 {
   "name": "@aiwayds/dsh-dcp",
-  "version": "0.5.0",
+  "version": "0.5.1",
   "description": "Deterministic context-pruning compaction backend for dsh (DeepSeek Harness) — zero-LLM summaries, /dcp command, works out of the box. Design references Opencode-DCP/opencode-dynamic-context-pruning.",
   "type": "module",
   "main": "lib/index.js",
@@ -62,18 +62,42 @@
     "@deepseek-ai/schemastery": "^3.18.1"
   },
   "peerDependenciesMeta": {
-    "@deepseek-ai/cordis": { "optional": true },
-    "@deepseek-ai/dsh-agent": { "optional": true },
-    "@deepseek-ai/dsh-brand": { "optional": true },
-    "@deepseek-ai/dsh-commands": { "optional": true },
-    "@deepseek-ai/dsh-compaction": { "optional": true },
-    "@deepseek-ai/dsh-compaction-basic": { "optional": true },
-    "@deepseek-ai/dsh-compaction-tool-result-pruner": { "optional": true },
-    "@deepseek-ai/dsh-invariants": { "optional": true },
-    "@deepseek-ai/dsh-llm": { "optional": true },
-    "@deepseek-ai/dsh-session": { "optional": true },
-    "@deepseek-ai/dsh-token-meter": { "optional": true },
-    "@deepseek-ai/schemastery": { "optional": true }
+    "@deepseek-ai/cordis": {
+      "optional": true
+    },
+    "@deepseek-ai/dsh-agent": {
+      "optional": true
+    },
+    "@deepseek-ai/dsh-brand": {
+      "optional": true
+    },
+    "@deepseek-ai/dsh-commands": {
+      "optional": true
+    },
+    "@deepseek-ai/dsh-compaction": {
+      "optional": true
+    },
+    "@deepseek-ai/dsh-compaction-basic": {
+      "optional": true
+    },
+    "@deepseek-ai/dsh-compaction-tool-result-pruner": {
+      "optional": true
+    },
+    "@deepseek-ai/dsh-invariants": {
+      "optional": true
+    },
+    "@deepseek-ai/dsh-llm": {
+      "optional": true
+    },
+    "@deepseek-ai/dsh-session": {
+      "optional": true
+    },
+    "@deepseek-ai/dsh-token-meter": {
+      "optional": true
+    },
+    "@deepseek-ai/schemastery": {
+      "optional": true
+    }
   },
   "devDependencies": {
     "@deepseek-ai/cordis": "^4.0.1",
