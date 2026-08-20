@@ -44,6 +44,26 @@ test('/dcp status omits the per-session line when nothing has compacted', async 
   assert.ok(!result.text.includes('per-session:'))
 })
 
+test('/dcp status caps the per-session line at 10 sessions with +N more', async () => {
+  const engine = mockEngine()
+  engine.sessionStatsOverview = () =>
+    Array.from({ length: 11 }, (_, i) => ({ id: `session-${i + 1}`, compactions: 1, shadowedTokens: 10 }))
+  const result = await executeDcp(identityCtx(), invocation(''), engine, '1.2.3')
+  assert.ok(result.text.includes('per-session: session-1'))
+  assert.ok(result.text.includes('session-10'))
+  assert.ok(!result.text.includes('session-11'), 'the 11th session is capped off the line')
+  assert.ok(result.text.includes('+1 more'))
+})
+
+test('/dcp status shows no +N more when exactly 10 sessions compacted', async () => {
+  const engine = mockEngine()
+  engine.sessionStatsOverview = () =>
+    Array.from({ length: 10 }, (_, i) => ({ id: `session-${i + 1}`, compactions: 1, shadowedTokens: 10 }))
+  const result = await executeDcp(identityCtx(), invocation(''), engine, '1.2.3')
+  assert.ok(result.text.includes('session-10'))
+  assert.ok(!result.text.includes('more'), 'exactly 10 sessions fit with no +N more')
+})
+
 test('/dcp help and unknown subcommands', async () => {
   const help = await executeDcp(identityCtx(), invocation('help'), mockEngine(), '1.2.3')
   assert.ok(help.text.includes('/dcp compact'))

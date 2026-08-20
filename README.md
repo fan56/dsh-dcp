@@ -122,6 +122,8 @@ npx dsh-dcp-setup                   # 安全脚本：带日期备份 → 只追�
 | `maxItems` / `maxItemChars` | 10 / 200 | 摘要密度 |
 | `maxSummaryTokens` | 2048 | 摘要 token 预算 |
 
+> **升级提示（0.5.0）**：`roundInterval` 的计数单位由 completed turn 改为 assistant message——同值下触发会更频繁（一个 turn 内往往有多条 assistant message）。
+
 ## 设计参考
 
 - [Opencode-DCP/opencode-dynamic-context-pruning](https://github.com/Opencode-DCP/opencode-dynamic-context-pruning)

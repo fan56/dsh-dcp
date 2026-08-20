@@ -150,6 +150,8 @@ All optional, defaults work out of the box:
 | `maxItems` / `maxItemChars` | 10 / 200 | summary density |
 | `maxSummaryTokens` | 2048 | summary token budget |
 
+> **Upgrade note (0.5.0)**: the `roundInterval` counter switched from completed turns to assistant messages — the same value now triggers more often (a single turn usually contains several assistant messages).
+
 ## Design reference
 
 - [Opencode-DCP/opencode-dynamic-context-pruning](https://github.com/Opencode-DCP/opencode-dynamic-context-pruning)
