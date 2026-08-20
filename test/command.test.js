@@ -9,6 +9,7 @@ function mockEngine() {
     config: Object.freeze({ thresholdRatio: 0.8, retainRatio: 0.16 }),
     dcpStats: { compactions: 2, shadowedTokens: 1234, lastAt: null },
     pluginPath: '/x/dsh-dcp/lib/index.js',
+    sessionStatsOverview: () => [],
   }
 }
 
@@ -25,6 +26,22 @@ test('/dcp with no arguments shows status', async () => {
   assert.ok(result.text.includes('dedup=true'))
   assert.ok(result.text.includes('2 compactions'))
   assert.ok(result.text.includes('1234 tokens shadowed'))
+})
+
+test('/dcp status lists per-session compactions for compacted sessions', async () => {
+  const engine = mockEngine()
+  engine.sessionStatsOverview = () => [
+    { id: 'top', compactions: 2, shadowedTokens: 444 },
+    { id: 'child', compactions: 1, shadowedTokens: 22 },
+  ]
+  const result = await executeDcp(identityCtx(), invocation(''), engine, '1.2.3')
+  assert.equal(result.kind, 'success')
+  assert.ok(result.text.includes('per-session: top (2 compactions, ~444 tokens), child (1 compaction, ~22 tokens)'))
+})
+
+test('/dcp status omits the per-session line when nothing has compacted', async () => {
+  const result = await executeDcp(identityCtx(), invocation(''), mockEngine(), '1.2.3')
+  assert.ok(!result.text.includes('per-session:'))
 })
 
 test('/dcp help and unknown subcommands', async () => {

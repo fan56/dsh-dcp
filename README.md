@@ -92,6 +92,8 @@ npx dsh-dcp-setup                   # 安全脚本：带日期备份 → 只追�
 
 可调键：`dedup`、`purgeErrors`、`maxItems`、`maxItemChars`、`maxSummaryTokens`、`language`、`tokenEstimate`、`thresholdRatio`、`roundInterval`、`notice`。
 
+`/dcp` 状态还会列出每个发生过压缩的会话（per-session 概览，含子代理），例如 `per-session: session-1 (2 compactions, ~444 tokens), child (1 compaction, ~22 tokens)`。压缩按会话独立计数；已销毁的会话（含 one-shot 子代理）自动从概览消失；列表封顶一行（最多前 10 个会话，超出显示 `+N more`）。
+
 ## 触发条件
 
 | 触发 | 时机 | 说明 |
@@ -128,7 +130,7 @@ npx dsh-dcp-setup                   # 安全脚本：带日期备份 → 只追�
 ## 开发
 
 ```bash
-npm install && npm test     # 61 个用例：抽取/压缩/命令/配置/触发/安装脚本
+npm install && npm test     # 65 个用例：抽取/压缩/命令/配置/触发/安装脚本
 ```
 
 ## License

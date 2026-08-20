@@ -115,6 +115,13 @@ Settable: `dedup`, `purgeErrors`, `maxItems`, `maxItemChars`,
 `maxSummaryTokens`, `language`, `tokenEstimate`, `thresholdRatio`,
 `roundInterval`, `notice`.
 
+The `/dcp` status also lists every session that has compacted (subagents
+included): `per-session: session-1 (2 compactions, ~444 tokens), child
+(1 compaction, ~22 tokens)`. Compactions count per session; disposed
+sessions (one-shot subagents included) fall out of the overview
+automatically, and the list is capped at the first 10 sessions (`+N more`
+for the rest) so the status stays one line.
+
 ## Triggers
 
 | Trigger | When | Notes |
@@ -151,7 +158,7 @@ All optional, defaults work out of the box:
 ## Development
 
 ```bash
-npm install && npm test     # 61 tests: extractor/compaction/command/config/triggers/setup
+npm install && npm test     # 65 tests: extractor/compaction/command/config/triggers/setup
 ```
 
 ## License

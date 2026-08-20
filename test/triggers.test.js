@@ -196,6 +196,34 @@ test('notice: false records stats without appending; append failures never propa
   assert.ok(ctx.__warnings.some((text) => text.includes('notice append failed')))
 })
 
+test('per-session stats accumulate per session; overview lists only live sessions', () => {
+  const engine = new DcpEngine(listenerCtx(), {})
+  const top = fakeSession('top')
+  const child = fakeSession('child')
+  engine.sessions = { list: () => [top, child] }
+
+  engine.recordCompaction(top, { shadowedSeqs: [1, 2], shadowedTokenCount: 111 }, 'round')
+  engine.recordCompaction(child, { shadowedSeqs: [1], shadowedTokenCount: 22 }, 'auto')
+  engine.recordCompaction(top, { shadowedSeqs: [1, 2, 3], shadowedTokenCount: 333 }, 'manual')
+
+  assert.deepEqual(engine.sessionStatsOverview(), [
+    { id: 'top', compactions: 2, shadowedTokens: 444 },
+    { id: 'child', compactions: 1, shadowedTokens: 22 },
+  ])
+  // A disposed session (dropped from the store) falls out of the overview —
+  // the WeakMap record is unreachable, never retained.
+  engine.sessions = { list: () => [top] }
+  assert.deepEqual(engine.sessionStatsOverview(), [{ id: 'top', compactions: 2, shadowedTokens: 444 }])
+})
+
+test('per-session stats record fine without a sessions service; overview is empty then', () => {
+  const engine = new DcpEngine(listenerCtx(), {})
+  const session = fakeSession('solo')
+  engine.recordCompaction(session, { shadowedSeqs: [1], shadowedTokenCount: 9 }, 'auto')
+  assert.equal(engine.dcpStats.compactions, 1)
+  assert.deepEqual(engine.sessionStatsOverview(), [])
+})
+
 // ---------------------------------------------------------------------------
 // Real-override coverage: stub BasicCompactionEngine's prototype methods so
 // DcpEngine's own overrides (label routing, stats, notice, counter release)
