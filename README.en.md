@@ -119,12 +119,12 @@ Settable: `dedup`, `purgeErrors`, `maxItems`, `maxItemChars`,
 
 | Trigger | When | Notes |
 |---|---|---|
-| Pressure | before every step | tokens ≥ `thresholdRatio` (default 0.7) × context window, inherited |
+| Pressure | before every step | tokens ≥ `thresholdRatio` (inherited upstream default 0.8; this plugin's bundle mounts 0.7 — see config table) × context window |
 | Overflow recovery | on a provider context-window error | inherited |
-| **Round interval** | every `roundInterval` completed turns | added by this plugin; one round = one successfully completed turn. **Default 50**: first compaction at turn 50, then every 50 more (100, 150, …); any compaction (pressure included) restarts the clock. Fires at the first idle boundary after the count is reached (below the pressure threshold too). `0` disables; requires the default `auto: true` |
+| **Round interval** | every `roundInterval` assistant messages | added by this plugin; one round = one LLM roundtrip (each tool-iteration response counts, so one-shot subagents trigger too). **Default 50**: first compaction after message 50, then every 50 more (100, 150, …); any compaction (pressure included) restarts the clock. Fires at the first idle boundary after the count is reached (below the pressure threshold too). `0` disables; requires the default `auto: true` |
 | Manual | `/dcp compact`, `/compact` | anytime |
 
-- **Subagents are covered**: in-process subagents (including continuable children) dispatch through the same events, so pressure/overflow/round triggers count and fire per child session independently.
+- **Subagents are covered**: in-process subagents (including continuable and one-shot children) dispatch through the same events, so pressure/overflow/round triggers count and fire per child session independently. The round trigger counts assistant messages, so a one-shot subagent whose whole run is a single turn (many tool iterations) triggers too.
 - **Visibility**: after every trigger event a one-line notice row (`dcp: compacted N history items (~X tokens, trigger)`) is appended to the session; frontends render it as a collapsed row. Note the row also rides the model request context (~15–25 tokens per compaction), and it is **on by default since 0.4.0** — disable with `notice: false`. `/dcp` stats count every committed region (a pressure retry loop may commit several).
 
 ## Configuration
@@ -133,8 +133,8 @@ All optional, defaults work out of the box:
 
 | Key | Default | Meaning |
 |---|---|---|
-| `thresholdRatio` | 0.7 | pressure trigger; 0.7 recommended for CJK-heavy sessions |
-| `roundInterval` | 50 | compact every N completed turns (0 disables). Default 50: 50, 100, 150… — the clock restarts after every compaction |
+| `thresholdRatio` | 0.8 | pressure trigger (inherited upstream compaction-basic default 0.8; this plugin's bundle patch mounts 0.7, recommended for CJK-heavy sessions) |
+| `roundInterval` | 50 | compact every N assistant messages (one LLM roundtrip) (0 disables). Default 50: 50, 100, 150… — the clock restarts after every compaction |
 | `notice` | `true` | append the one-line compaction notice to the session |
 | `language` | `zh` | summary language; `zh` also enables Chinese error/"待办：" detection |
 | `tokenEstimate` | `cjk` | CJK (zh/ja/ko/full-width) at ~2 chars/token; `ascii` matches the host |

@@ -62,53 +62,57 @@ function fakeSession(id) {
 
 const fire = (ctx, name, ...args) => ctx.__listeners.get(name)?.forEach((handler) => handler(...args))
 const turnEnd = (turn, kind = 'completed') => ({ type: 'turn/end', data: { turn, reason: { kind } } })
+const assistantMessage = (turn, step = 1) => ({
+  type: 'assistant/message',
+  data: { turn, step, message: { role: 'assistant', content: [{ type: 'text', text: 'roundtrip' }] } },
+})
 
 function armedEngine(config) {
   const ctx = listenerCtx()
   return { ctx, engine: new RoundSpyEngine(ctx, config) }
 }
 
-test('round trigger compacts at the first idle boundary after N completed turns', async () => {
+test('round trigger compacts at the first idle boundary after N assistant messages', async () => {
   const agent = { session: fakeSession('s1'), options: {} }
   const { ctx, engine } = armedEngine({ roundInterval: 2 })
   const idle = async () => {
     fire(ctx, 'agent/status', { agent, status: 'idle' })
     await new Promise((resolve) => setTimeout(resolve, 0))
   }
-  fire(ctx, 'session/event', agent.session, turnEnd(1))
+  fire(ctx, 'session/event', agent.session, assistantMessage(1))
   await idle()
   assert.equal(engine.compactNowCalls, 0)
-  fire(ctx, 'session/event', agent.session, turnEnd(2))
+  fire(ctx, 'session/event', agent.session, assistantMessage(1, 2))
   await idle()
   assert.equal(engine.compactNowCalls, 1)
-  // The boundary was consumed: no new completed turns, no second compaction.
+  // The boundary was consumed: no new assistant messages, no second compaction.
   await idle()
   assert.equal(engine.compactNowCalls, 1)
   // A fresh full interval is required before the next one.
-  fire(ctx, 'session/event', agent.session, turnEnd(3))
+  fire(ctx, 'session/event', agent.session, assistantMessage(2))
   await idle()
   assert.equal(engine.compactNowCalls, 1)
-  fire(ctx, 'session/event', agent.session, turnEnd(4))
+  fire(ctx, 'session/event', agent.session, assistantMessage(2, 2))
   await idle()
   assert.equal(engine.compactNowCalls, 2)
 })
 
-test('only completed turns count towards the interval', async () => {
+test('only assistant/message events count — turn outcome does not gate the interval', async () => {
   const agent = { session: fakeSession('s2'), options: {} }
   const { ctx, engine } = armedEngine({ roundInterval: 1 })
   fire(ctx, 'session/event', agent.session, turnEnd(1, 'aborted'))
   fire(ctx, 'session/event', agent.session, turnEnd(1, 'error'))
   fire(ctx, 'agent/status', { agent, status: 'idle' })
-  assert.equal(engine.compactNowCalls, 0)
-  fire(ctx, 'session/event', agent.session, turnEnd(2))
+  assert.equal(engine.compactNowCalls, 0, 'turn/end alone never increments the counter')
+  fire(ctx, 'session/event', agent.session, assistantMessage(1))
   fire(ctx, 'agent/status', { agent, status: 'idle' })
-  assert.equal(engine.compactNowCalls, 1)
+  assert.equal(engine.compactNowCalls, 1, 'one assistant/message is one LLM roundtrip')
 })
 
 test('busy keeps the boundary for the next idle; other failures release it', async () => {
   const agent = { session: fakeSession('s3'), options: {} }
   const { ctx, engine } = armedEngine({ roundInterval: 1 })
-  fire(ctx, 'session/event', agent.session, turnEnd(1))
+  fire(ctx, 'session/event', agent.session, assistantMessage(1))
 
   engine.nextError = new ManualCompactionError('busy', 'x')
   fire(ctx, 'agent/status', { agent, status: 'idle' })
@@ -137,21 +141,21 @@ test('sessions count independently — a subagent sibling does not fire the pare
     fire(ctx, 'agent/status', { agent, status: 'idle' })
     await new Promise((resolve) => setTimeout(resolve, 0))
   }
-  fire(ctx, 'session/event', parent.session, turnEnd(1))
-  fire(ctx, 'session/event', child.session, turnEnd(1))
+  fire(ctx, 'session/event', parent.session, assistantMessage(1))
+  fire(ctx, 'session/event', child.session, assistantMessage(1))
   await idle(child)
-  assert.equal(engine.compactNowCalls, 0, 'child is only at round 1 of 2')
-  fire(ctx, 'session/event', child.session, turnEnd(2))
+  assert.equal(engine.compactNowCalls, 0, 'child is only at message 1 of 2')
+  fire(ctx, 'session/event', child.session, assistantMessage(1, 2))
   await idle(child)
   assert.equal(engine.compactNowCalls, 1, 'child reached its own interval')
   await idle(parent)
-  assert.equal(engine.compactNowCalls, 1, 'parent still at round 1 of 2')
+  assert.equal(engine.compactNowCalls, 1, 'parent still at message 1 of 2')
 })
 
 test('roundInterval 0 (explicit off) and auto: false never trigger', async () => {
   const agent = { session: fakeSession('s4'), options: {} }
   const off = armedEngine({ roundInterval: 0 })
-  for (let turn = 1; turn <= 5; turn += 1) fire(off.ctx, 'session/event', agent.session, turnEnd(turn))
+  for (let message = 1; message <= 5; message += 1) fire(off.ctx, 'session/event', agent.session, assistantMessage(1, message))
   fire(off.ctx, 'agent/status', { agent, status: 'idle' })
   assert.equal(off.engine.compactNowCalls, 0)
 
@@ -220,7 +224,7 @@ test('real compactNow override: round label reaches the notice; counter is consu
     calls.superCompactNow += 1
     return fakeResult()
   }, async () => {
-    fire(ctx, 'session/event', agent.session, turnEnd(1))
+    fire(ctx, 'session/event', agent.session, assistantMessage(1))
     fire(ctx, 'agent/status', { agent, status: 'idle' })
     await new Promise((resolve) => setTimeout(resolve, 0))
   })
@@ -229,7 +233,7 @@ test('real compactNow override: round label reaches the notice; counter is consu
   assert.equal(engine.dcpStats.shadowedTokens, 777)
   assert.equal(agent.session.appended.length, 1)
   assert.ok(agent.session.appended[0].data.source.summary.includes('round'))
-  // Counter consumed by the committed compaction: no re-trigger without a new turn.
+  // Counter consumed by the committed compaction: no re-trigger without a new message.
   fire(ctx, 'agent/status', { agent, status: 'idle' })
   await new Promise((resolve) => setTimeout(resolve, 0))
   assert.equal(calls.superCompactNow, 1)
@@ -254,7 +258,7 @@ test('real compactNow override: null result releases the round counter without a
     calls.superCompactNow += 1
     return null
   }, async () => {
-    fire(ctx, 'session/event', agent.session, turnEnd(1))
+    fire(ctx, 'session/event', agent.session, assistantMessage(1))
     fire(ctx, 'agent/status', { agent, status: 'idle' })
     await new Promise((resolve) => setTimeout(resolve, 0))
   })
@@ -299,7 +303,7 @@ test('real compactIfNeeded override: one notice per trigger event, labeled by ki
 test('cancelled round compaction keeps the accumulated rounds for the next idle', async () => {
   const agent = { session: fakeSession('r6'), options: {} }
   const { ctx, engine } = armedEngine({ roundInterval: 1 })
-  fire(ctx, 'session/event', agent.session, turnEnd(1))
+  fire(ctx, 'session/event', agent.session, assistantMessage(1))
   engine.nextError = new ManualCompactionError('cancelled', 'x')
   fire(ctx, 'agent/status', { agent, status: 'idle' })
   await new Promise((resolve) => setTimeout(resolve, 0))
