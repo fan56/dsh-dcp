@@ -1,0 +1,154 @@
+# Release: publish to npm + create the GitHub Release when a v* tag is pushed.
+#
+# Hardened per the dsh-model-sync / dsh-tui-pi release incidents:
+#   - gates: build + typecheck + tests before any publish
+#   - the publish step is idempotent: it skips when the version is already on
+#     npm and treats npm's known lost-response failure (PUT lands, follow-up
+#     errors 403/404) as success
+#   - after publishing, `npm view` must SEE the version — npm has committed
+#     writes while reporting failure, so the exit code alone is never trusted
+#   - the GitHub Release job never repeats the npm publish and skips if the
+#     release already exists
+#
+# If the GitHub Release step fails after a successful publish, re-run the
+# `release` job alone — the publish is never repeated.
+name: Release
+
+on:
+  push:
+    tags: ['v*']
+
+permissions:
+  contents: read
+
+jobs:
+  publish:
+    name: Gate & Publish
+    # Only the upstream repo publishes; forks skip this job (and the release
+    # job below is skipped with it via needs).
+    if: github.repository == 'fan56/dsh-dcp'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+      id-token: write # npm provenance (OIDC)
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          registry-url: https://registry.npmjs.org
+
+      - name: Install dependencies
+        run: npm install --no-audit --no-fund
+
+      - name: Build & Check & Test
+        run: npm run build --if-present && npm run check --if-present && npm test
+
+      - name: Verify tag matches package.json version
+        run: |
+          PKG_VERSION="$(node -p "require('./package.json').version")"
+          TAG_VERSION="${GITHUB_REF_NAME#v}"
+          echo "package.json ${PKG_VERSION} vs tag ${GITHUB_REF_NAME} -> ${TAG_VERSION}"
+          if [ "${PKG_VERSION}" != "${TAG_VERSION}" ]; then
+            echo "::error::tag ${GITHUB_REF_NAME} does not match package.json version ${PKG_VERSION} — refusing to publish"
+            exit 1
+          fi
+
+      - name: Publish to npm
+        # Idempotent: if the version is already on the registry, warn and
+        # skip instead of failing. Two shapes of "already published":
+        # 1. Visible to `npm view` up front (re-run, or a concurrent publish
+        #    that predates this step) — pre-check no-ops so the downstream
+        #    release job can still complete.
+        # 2. Landing WHILE this very `npm publish --provenance` runs: its
+        #    known follow-up failure mode reports 403/404 after the first PUT
+        #    actually succeeded. Match the registry error text instead of
+        #    trusting the exit code; npm versions are immutable, so
+        #    degrade-to-warning is the only correct outcome.
+        run: |
+          TAG_VERSION="${GITHUB_REF_NAME#v}"
+          if npm view "@aiwayds/dsh-dcp@${TAG_VERSION}" version >/dev/null 2>&1; then
+            echo "::warning::@aiwayds/dsh-dcp@${TAG_VERSION} is already on npm — skipping publish"
+            exit 0
+          fi
+          set +e
+          PUB_OUT="$(npm publish --access public --provenance 2>&1)"
+          PUB_RC=$?
+          set -e
+          printf '%s\n' "$PUB_OUT"
+          if [ "${PUB_RC}" -ne 0 ] && printf '%s' "$PUB_OUT" | grep -qiE "cannot publish over the previously published versions|E404|E403"; then
+            echo "::warning::publish errored but may have landed (npm's known lost-response mode) — the verify step decides"
+            exit 0
+          fi
+          exit "${PUB_RC}"
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+
+      - name: Verify the publish actually landed
+        # The registry sometimes commits the write and loses the response —
+        # a green publish exit code is NOT proof. `npm view` seeing the
+        # version is the only acceptance signal.
+        run: |
+          TAG_VERSION="${GITHUB_REF_NAME#v}"
+          for attempt in 1 2 3 4 5 6; do
+            if npm view "@aiwayds/dsh-dcp@${TAG_VERSION}" version >/dev/null 2>&1; then
+              echo "verified: @aiwayds/dsh-dcp@${TAG_VERSION} is visible on the registry (attempt ${attempt})"
+              exit 0
+            fi
+            echo "attempt ${attempt}: not visible yet; waiting 5s"
+            sleep 5
+          done
+          echo "::error::publish reported success but npm view never saw @aiwayds/dsh-dcp@${TAG_VERSION} — inspect the registry manually before trusting this release"
+          exit 1
+
+  release:
+    name: Create GitHub Release
+    needs: publish
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: write # create the GitHub Release
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # Full fetch so the annotated tag object is available for the
+          # tag-message extraction step below.
+          fetch-depth: 0
+
+      - name: Read tag message
+        id: tag_message
+        env:
+          TAG: ${{ github.ref_name }}
+        run: |
+          {
+            echo 'BODY<<EOF_TAG_MESSAGE'
+            # Annotated tag → its message; lightweight tag → falls back to the
+            # commit message.
+            git tag -l --format='%(contents:subject)%0a%0a%(contents:body)' "$TAG"
+            echo 'EOF_TAG_MESSAGE'
+          } >> "$GITHUB_OUTPUT"
+
+      # Skip if the release was already created (e.g. manually after a failed
+      # run) — re-creating would overwrite that body with the tag message.
+      - name: Check if GitHub Release already exists
+        id: check_release
+        env:
+          TAG: ${{ github.ref_name }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            echo "exists=true" >> "$GITHUB_OUTPUT"
+            echo "::notice::GitHub Release $TAG already exists — skipping (preserving existing body)"
+          else
+            echo "exists=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Create GitHub Release
+        if: steps.check_release.outputs.exists != 'true'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ github.ref_name }}
+          BODY: ${{ steps.tag_message.outputs.BODY }}
+        run: gh release create "$TAG" --title "$TAG" --notes "$BODY"
