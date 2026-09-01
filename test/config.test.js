@@ -26,7 +26,7 @@ test('resolveDcpConfig fills defaults and freezes', () => {
   assert.equal(resolved.maxSummaryTokens, 2048)
   assert.equal(resolved.language, 'en')
   assert.deepEqual(resolved.protectedTools, ['write', 'edit', 'apply_patch'])
-  assert.throws(() => { resolved.dedup = false }, /Cannot assign/)
+  assert.throws(() => { /** @type {any} */ (resolved).dedup = false }, /Cannot assign/)
 })
 
 test('resolveDcpConfig validates types', () => {

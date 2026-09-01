@@ -93,7 +93,7 @@ test('summarize() honors abort signals before working', async () => {
   const engine = new DcpEngine(mockCtx(), {})
   await assert.rejects(
     engine.summarize({ messages: region }, { session: {}, options: {} }, AbortSignal.abort()),
-    (error) => error.name === 'AbortError',
+    (/** @type {any} */ error) => error.name === 'AbortError',
   )
 })
 

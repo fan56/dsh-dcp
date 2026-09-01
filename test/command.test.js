@@ -9,7 +9,7 @@ function mockEngine() {
     config: Object.freeze({ thresholdRatio: 0.8, retainRatio: 0.16 }),
     dcpStats: { compactions: 2, shadowedTokens: 1234, lastAt: null },
     pluginPath: '/x/dsh-dcp/lib/index.js',
-    sessionStatsOverview: () => [],
+    sessionStatsOverview: /** @type {() => Array<{id: string, compactions: number, shadowedTokens: number}>} */ (() => []),
   }
 }
 

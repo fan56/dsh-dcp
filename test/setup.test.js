@@ -40,7 +40,7 @@ test('planPatch never duplicates an existing compaction-basic entry', () => {
 test('mountBlock appends cleanly after existing content (append-only)', () => {
   const original = `# my comment\n- id: anysearch\n  name: x\n`
   const plan = planPatch(original, { name: NAME })
-  const merged = original + plan.block
+  const merged = original + (/** @type {{action: string, block: string}} */ (plan)).block
   // the user's original content is byte-for-byte intact at the front
   assert.ok(merged.startsWith(original))
   // and the appended block is valid as additional YAML list items

@@ -60,7 +60,7 @@ function derivedReceivers(engine) {
 function fakeSession(id) {
   return {
     header: { id },
-    appended: [],
+    appended: /** @type {{type: string, data: any}[]} */ ([]),
     append(type, data) { this.appended.push({ type, data }) },
   }
 }
@@ -77,7 +77,7 @@ test('compactNow passes the trigger-label read on derived receivers', async () =
     const method = Reflect.get(engine, 'compactNow', receiver).bind(receiver)
     await assert.rejects(
       method(agent, new AbortController().signal),
-      (error) => {
+      (/** @type {any} */ error) => {
         assert.ok(!(error instanceof TypeError), `${label}: ${error.message}`)
         assert.ok(!/private member/.test(error.message), `${label}: ${error.message}`)
         assert.ok(error instanceof ManualCompactionError, `${label}: expected ManualCompactionError, got ${error}`)

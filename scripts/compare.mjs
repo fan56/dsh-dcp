@@ -175,7 +175,7 @@ function fmt(n) {
  */
 function simulate(events, mode, useDcp) {
   const surface = []
-  const stats = { requests: 0, inputTokens: 0, hitTokens: 0, compactions: [] }
+  const stats = /** @type {{ requests: number, inputTokens: number, hitTokens: number, compactions: Array<{regionNodes: number, regionHost: number, regionCjk: number, summaryHost: number, summaryCjk: number, compression: string, totalAfter: number, preview: string}> }} */ ({ requests: 0, inputTokens: 0, hitTokens: 0, compactions: [] })
   let prevSurface = []
   let compactionId = 0
 

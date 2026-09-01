@@ -18,7 +18,7 @@ function listenerCtx() {
     on: (name, handler) => {
       if (!listeners.has(name)) listeners.set(name, [])
       listeners.get(name).push(handler)
-      return () => listeners.get(name).splice(listeners.indexOf(handler), 1)
+      return () => { const hs = listeners.get(name); hs.splice(hs.indexOf(handler), 1) }
     },
     effect: (factory) => {
       const iterator = factory()
@@ -41,13 +41,15 @@ function listenerCtx() {
 /** Engine whose compactNow is intercepted instead of driving the region machinery. */
 class RoundSpyEngine extends DcpEngine {
   compactNowCalls = 0
+  /** @type {{shadowedSeqs: number[], shadowedTokenCount: number, summarySeq: number} | null} */
   nextResult = { shadowedSeqs: [1, 2, 3], shadowedTokenCount: 1234, summarySeq: 9 }
+  /** @type {Error | null} */
   nextError = null
 
   async compactNow(agent, signal, sourceCommandId) {
     this.compactNowCalls += 1
     if (this.nextError !== null) throw this.nextError
-    return this.nextResult
+    return /** @type {any} */ (this.nextResult)
   }
 }
 
@@ -55,7 +57,7 @@ class RoundSpyEngine extends DcpEngine {
 function fakeSession(id) {
   return {
     header: { id },
-    appended: [],
+    appended: /** @type {{type: string, data: any}[]} */ ([]),
     append(type, data) { this.appended.push({ type, data }) },
   }
 }

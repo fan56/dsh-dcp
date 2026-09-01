@@ -13,14 +13,19 @@ import {
 } from '../lib/summarizer.js'
 
 /** Minimal message builders matching dsh-llm runtime shapes. */
+/** @type {(text: string) => any} */
 const user = (text) => ({ id: 'u', role: 'user', content: [{ type: 'text', text }], source: { kind: 'user' } })
+/** @type {(text: string) => any} */
 const checkpoint = (text) => ({
   id: 'c', role: 'user', content: [{ type: 'text', text }], source: { kind: 'plugin', plugin: 'compact' },
 })
+/** @type {(blocks: any) => any} */
 const assistant = (blocks) => ({
   id: 'a', role: 'assistant', content: blocks, source: { kind: 'model', provider: 'p', model: 'm' },
 })
+/** @type {(id: string, name: string, args: any) => any} */
 const toolCall = (id, name, args) => ({ type: 'tool-call', id, name, arguments: JSON.stringify(args) })
+/** @type {(callId: string, lines: string[], isError?: boolean) => any} */
 const toolResult = (callId, lines, isError = false) => ({
   id: 'r', role: 'user', content: [{ type: 'tool-result', toolCallId: callId, isError, content: lines.map((text) => ({ type: 'text', text })) }], source: { kind: 'tool', callId },
 })
@@ -235,12 +240,12 @@ test('estimateMessageTokens covers text, tool-call args, and tool results', () =
 })
 
 test('zh language enables Chinese error and todo rules; en ignores them', () => {
-  const msgs = [
+  const msgs = /** @type {any} */ ([
     { id: '0', role: 'user', content: [{ type: 'text', text: '部署失败了，帮我看看' }], source: { kind: 'user' } },
     { id: '1', role: 'assistant', content: [{ type: 'text', text: '检查日志\n待办：写个复现脚本' }], source: { kind: 'model', provider: 'p', model: 'm' } },
     { id: '2', role: 'assistant', content: [{ type: 'tool-call', id: 'c1', name: 'bash', arguments: '{"command":"cat log"}' }], source: { kind: 'model', provider: 'p', model: 'm' } },
     { id: '3', role: 'user', content: [{ type: 'tool-result', toolCallId: 'c1', isError: false, content: [{ type: 'text', text: '找不到模块：build/out.js' }] }], source: { kind: 'tool', callId: 'c1' } },
-  ]
+  ])
   const zhFacts = extractFacts(msgs, 'zh')
   assert.ok(zhFacts.errors.some((line) => line.includes('找不到模块')))
   assert.ok(zhFacts.pendingTodos.includes('写个复现脚本'))
@@ -285,7 +290,7 @@ test('tokenEstimate cjk keeps CJK summaries inside their real-token budget; asci
     content: [{ type: 'tool-result', toolCallId: 'c', content: [{ type: 'text', text: 'lorem ipsum dolor sit amet consectetur adipiscing elit '.repeat(50) }] }],
     source: { kind: 'tool', callId: 'c' },
   }
-  const region = [...intents, filler]
+  const region = /** @type {any} */ ([...intents, filler])
   const dcpCfg = { dedup: true, purgeErrors: true, maxItems: 100, maxItemChars: 200, maxSummaryTokens: 2048, language: 'zh', protectedTools: [] }
   const cjk = summarizeDeterministically({ messages: region }, { ...dcpCfg, tokenEstimate: 'cjk' }).summary[0].text
   const ascii = summarizeDeterministically({ messages: region }, { ...dcpCfg, tokenEstimate: 'ascii' }).summary[0].text
@@ -305,14 +310,14 @@ test('tokenEstimate cjk keeps CJK summaries inside their real-token budget; asci
 })
 
 test('extractFacts ignores dsh-dcp notice rows; noticeText stays bounded-shape', () => {
-  const messages = [
+  const messages = /** @type {any} */ ([
     { id: 'u1', role: 'user', content: [{ type: 'text', text: '修一下CI' }], source: { kind: 'user' } },
     {
       id: 'n1', role: 'user',
       content: [{ type: 'text', text: 'dcp: 已压缩 87 条历史（约 23456 tokens，auto）' }],
       source: { kind: 'plugin', plugin: 'dsh-dcp', form: 'notice', summary: 'dcp: 已压缩 87 条历史（约 23456 tokens，auto）' },
     },
-  ]
+  ])
   const facts = extractFacts(messages, 'zh')
   assert.deepEqual(facts.intents, ['修一下CI'])
 
