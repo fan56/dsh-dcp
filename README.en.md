@@ -3,6 +3,8 @@
 Deterministic context-compaction backend for dsh (DeepSeek Harness): **context
 compaction without an LLM call**, works out of the box.
 
+**Requires dsh >= 0.1.2-rc.1** — this plugin targets the dsh RC/stable line only (CI and releases resolve the newest of the `latest`/`next` dist-tags at runtime). **The alpha line is no longer supported.**
+
 > [简体中文](README.md) · **English**
 
 ## Why

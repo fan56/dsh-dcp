@@ -2,6 +2,8 @@
 
 dsh（DeepSeek Harness）的确定性压缩后端：**上下文压缩不调 LLM**，开箱即用。
 
+**要求 dsh >= 0.1.2-rc.1** — 本插件只跟随 dsh RC/stable 线（CI 与发版在运行时解析 latest/next 中更新的 dist-tag）。**不再支持 alpha 线。**
+
 > **简体中文** · [English](README.en.md)
 
 ## 为什么做
