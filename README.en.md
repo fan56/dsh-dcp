@@ -105,6 +105,28 @@ npx dsh-dcp-setup                   # safe: date-stamped backup → append-only 
 > mount it. The web profile does not bundle the TUI, so it keeps the official
 > backend and is unaffected.
 
+## Uninstall
+
+**Bundle path** (`dsh plugin add`, or listed under `bundles`):
+
+```sh
+dsh plugin --profile <name> remove @aiwayds/dsh-dcp
+```
+
+The host reconciles automatically: the bundles entry is spliced, the patch layer drops with the package, and the stock LLM summarizer (`compaction-basic`) re-enables.
+
+**Setup-script path** (the patch block `npx dsh-dcp-setup` wrote):
+
+```bash
+npx dsh-dcp-setup --remove                        # default home patch
+npx dsh-dcp-setup --remove --profile tui          # a named profile
+npx dsh-dcp-setup --remove /path/to/cordis.patch.yml
+```
+
+`--remove` strips only the setup-written mount block (including any config you tuned), with the same date-stamped backup before modifying; hand-written mounts are left alone; the file is deleted when nothing else remains. Two WARN lines matter: a leftover `compaction-basic` disable entry keeps the stock summarizer off (remove it by hand if it was only for dsh-dcp), and another dsh-dcp mount in the same file is untouched.
+
+Removing the package without the reverse step leaves the mount pointing at the vanished absolute entry path, and the profile boot fails with module-not-found.
+
 ## /dcp command
 
 | Command | Effect |

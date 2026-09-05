@@ -3,7 +3,7 @@ import assert from 'node:assert/strict'
 import { mkdtempSync, mkdirSync, writeFileSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { planPatch, mountBlock, isMounted, hasEntry, backupStamp, findBundledProfiles } from '../lib/setup.js'
+import { planPatch, planRemoval, mountBlock, isMounted, hasEntry, backupStamp, findBundledProfiles } from '../lib/setup.js'
 
 const NAME = '/x/node_modules/@aiwayds/dsh-dcp/lib/index.js'
 
@@ -73,4 +73,68 @@ test('findBundledProfiles lists profiles that bundle a package', () => {
   } finally {
     rmSync(dir, { recursive: true, force: true })
   }
+})
+
+// ---- planRemoval: the uninstall reverse of planPatch/mountBlock ----
+
+test('planRemoval undoes planPatch exactly: user content preserved, nothing of ours left', () => {
+  const original = `# my comment\n- id: anysearch\n  name: x\n`
+  const plan = planPatch(original, { name: NAME })
+  const merged = original + (/** @type {{action: string, block: string}} */ (plan)).block
+  const removal = planRemoval(merged)
+  assert.equal(removal.removed, true)
+  assert.equal(removal.text, original)
+  assert.ok(!removal.text.includes('dsh-dcp'))
+  assert.ok(!removal.text.includes('compaction-basic'), 'the disable entry the setup added must go too')
+})
+
+test('planRemoval on a setup-created fresh file leaves empty text (caller deletes the file)', () => {
+  const plan = planPatch(undefined, { name: NAME })
+  const removal = planRemoval((/** @type {{action: string, block: string}} */ (plan)).block)
+  assert.equal(removal.removed, true)
+  assert.equal(removal.text, '')
+})
+
+test('planRemoval keeps user entries appended AFTER the mount block', () => {
+  const mounted = `# mine\n` + mountBlock({ name: NAME, includeDisable: true })
+  const merged = mounted + `- id: context7\n  name: '@deepseek-ai/dsh-mcp-client'\n`
+  const removal = planRemoval(merged)
+  assert.equal(removal.removed, true)
+  assert.ok(removal.text.includes('id: context7'))
+  assert.ok(!removal.text.includes('dsh-dcp'))
+})
+
+test('planRemoval removes the block even when the user tuned config inside the insert item', () => {
+  const mounted = mountBlock({ name: NAME, includeDisable: true })
+    .replace('thresholdRatio: 0.7', 'thresholdRatio: 0.9')
+    .replace('language: zh', 'language: en')
+  const removal = planRemoval(`# keep\n${mounted}- id: after\n  name: y\n`)
+  assert.equal(removal.removed, true)
+  assert.equal(removal.text, '# keep\n- id: after\n  name: y\n')
+})
+
+test('planRemoval is idempotent: a second run is a no-op', () => {
+  const merged = `# mine\n` + mountBlock({ name: NAME, includeDisable: true })
+  const first = planRemoval(merged)
+  const second = planRemoval(first.text)
+  assert.equal(second.removed, false)
+  assert.equal(second.text, first.text)
+})
+
+test('planRemoval leaves hand-written mounts (no setup marker) untouched', () => {
+  const handWritten = `- insert:\n    - id: dsh-dcp\n      name: '/some/absolute/path/lib/index.js'\n`
+  const removal = planRemoval(handWritten)
+  assert.equal(removal.removed, false)
+  assert.equal(removal.text, handWritten)
+  assert.ok(removal.note)
+})
+
+test('planRemoval on undefined/empty text is a no-op', () => {
+  assert.equal(planRemoval(undefined).removed, false)
+  assert.equal(planRemoval('').removed, false)
+})
+
+test('mountBlock writes the compaction-basic name guard so a host rename cannot silently disable an unrelated row', () => {
+  const block = mountBlock({ name: NAME, includeDisable: true })
+  assert.ok(block.includes("name: '@deepseek-ai/dsh-compaction-basic'"))
 })

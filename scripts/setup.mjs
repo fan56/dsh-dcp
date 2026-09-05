@@ -20,11 +20,13 @@
  *   node scripts/setup.mjs                 # home patch
  *   node scripts/setup.mjs --profile tui   # tui profile's patch
  *   node scripts/setup.mjs /path/to/cordis.patch.yml
+ *   node scripts/setup.mjs --remove [...]  # reverse: remove the setup-written
+ *                                          # mount block (same target forms)
  */
 import fs from 'node:fs'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { planPatch, backupStamp, findBundledProfiles } from '../lib/setup.js'
+import { planPatch, planRemoval, hasEntry, isMounted, backupStamp, findBundledProfiles } from '../lib/setup.js'
 
 const PKG = '@aiwayds/dsh-dcp'
 const pkgRoot = path.dirname(path.dirname(fileURLToPath(import.meta.url)))
@@ -36,18 +38,53 @@ function home() {
 
 function parseArgs(argv) {
   const force = argv.includes('--force')
+  const remove = argv.includes('--remove')
   if (argv.includes('--profile')) {
     const index = argv.indexOf('--profile')
     const name = argv[index + 1]
     if (!name) throw new Error('setup: --profile requires a profile name')
-    return { target: path.join(home(), 'profiles', name, 'cordis.patch.yml'), kind: 'profile', profileName: name, force }
+    return { target: path.join(home(), 'profiles', name, 'cordis.patch.yml'), kind: 'profile', profileName: name, force, remove }
   }
   const explicit = argv.find((a) => !a.startsWith('-'))
-  if (explicit) return { target: path.resolve(explicit), kind: 'explicit', force }
-  return { target: path.join(home(), 'cordis.patch.yml'), kind: 'home', force }
+  if (explicit) return { target: path.resolve(explicit), kind: 'explicit', force, remove }
+  return { target: path.join(home(), 'cordis.patch.yml'), kind: 'home', force, remove }
 }
 
-const { target, kind, profileName, force } = parseArgs(process.argv.slice(2))
+const { target, kind, profileName, force, remove } = parseArgs(process.argv.slice(2))
+
+if (remove) {
+  const existed = fs.existsSync(target)
+  const text = existed ? fs.readFileSync(target, 'utf8') : undefined
+  if (!existed) {
+    console.log(`no ${target} — nothing to remove.`)
+    process.exit(0)
+  }
+  const plan = planRemoval(text)
+  if (!plan.removed) {
+    console.log(`dsh-dcp mount not removed from ${target}.`)
+    if (plan.note) console.log(`note: ${plan.note}`)
+    process.exit(0)
+  }
+  const backup = `${target}.bak.${backupStamp()}`
+  fs.copyFileSync(target, backup)
+  console.log(`backup: ${backup}`)
+  if (plan.text === '') {
+    fs.rmSync(target)
+    console.log(`removed ${target} (the file held nothing else)`)
+  } else {
+    fs.writeFileSync(target, plan.text)
+    console.log(`removed the dsh-dcp mount block from ${target}`)
+  }
+  if (plan.text !== '' && hasEntry(plan.text, 'compaction-basic')) {
+    console.warn('WARN: a compaction-basic entry remains in this patch file — the stock LLM summarizer stays disabled; remove that entry by hand if it was only for dsh-dcp.')
+  }
+  if (plan.text !== '' && isMounted(plan.text)) {
+    console.warn('WARN: another dsh-dcp mount remains in this patch file — leaving it alone.')
+  }
+  console.log('restart dsh to apply.')
+  process.exit(0)
+}
+
 const existed = fs.existsSync(target)
 const text = existed ? fs.readFileSync(target, 'utf8') : undefined
 if (!existed) console.log(`no ${target} — will generate a fresh patch file`)

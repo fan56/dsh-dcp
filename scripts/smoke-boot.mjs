@@ -12,11 +12,16 @@
 //      as a file: dependency, and a cordis.patch.yml carrying the
 //      disable-compaction-basic + insert-dsh-dcp mount block
 //   3. pnpm install in the profile
-//   4. `dsh --profile smoke --dump-config` must compose dsh-dcp into the tree
-//      (mount/patch-layer proof)
-//   5. a real boot under a timeout must load the plugin tree without a loader
-//      error (a healthy boot is silent and survives to the kill signal; a
-//      broken plugin dies within ~1s with the loader error)
+//   4. Phase A: setup.mjs mounts the profile patch (marker block), the
+//      composed tree carries dsh-dcp with compaction-basic disabled, then
+//      `setup.mjs --remove` strips it and the recomposed tree is back to
+//      stock (this is what breaks a profile when the package is removed
+//      without the reverse step)
+//   5. Phase B: a hand-written mount pointing into the installed tarball —
+//      the true user shape — composes, and a real boot under a timeout must
+//      load the plugin tree without a loader error (a healthy boot is silent
+//      and survives to the kill signal; a broken plugin dies within ~1s with
+//      the loader error)
 //
 // The dsh CLI comes from $DSH_BIN if set (e.g. a scratch alpha closure:
 // DSH_BIN=~/tmp/dsh-alpha-closure/node_modules/@deepseek-ai/dsh/lib/bin.js),
@@ -57,18 +62,9 @@ if (pack.status !== 0 || pack.error) fail('npm pack failed', `${pack.stdout}\n${
 const tarball = path.join(work, pack.stdout.trim().split('\n').at(-1) ?? '')
 
 writeFileSync(path.join(profile, 'cordis.yml'), '# dsh profile root — empty; the tree is composed from the bundle patches\n[]\n')
-// The mount layer under test — isomorphic with scripts/setup.mjs's output:
-// compaction-basic disabled, dsh-dcp inserted by absolute entry path.
-writeFileSync(path.join(profile, 'cordis.patch.yml'), `# scratch smoke profile: dsh-dcp mounted the setup.mjs way
-- id: compaction-basic
-  disabled: true
-- insert:
-    - id: ${entryId}
-      name: ${path.join(profile, 'node_modules', '@aiwayds', 'dsh-dcp', 'lib', 'index.js')}
-      config:
-        thresholdRatio: 0.7
-        language: zh
-`)
+// The patch file starts EMPTY: Phase A below drives the full setup.mjs
+// mount → remove lifecycle against it, then Phase B hand-writes the mount
+// (isomorphic with setup.mjs's output) for the real-boot proof.
 writeFileSync(path.join(profile, 'pnpm-workspace.yaml'), 'packages:\n  - .\n\nnodeLinker: hoisted\nautoInstallPeers: false\n')
 writeFileSync(path.join(profile, 'package.json'), JSON.stringify({
   name: 'dsh-profile-smoke',
@@ -90,8 +86,47 @@ writeFileSync(path.join(profile, 'package.json'), JSON.stringify({
 const install = spawnSync('pnpm', ['install'], { cwd: profile, encoding: 'utf8' })
 if (install.status !== 0 || install.error) fail('pnpm install in the scratch profile failed', `${install.stdout}\n${install.stderr}`)
 
-// Phase 1 — mount proof: the composed tree must carry the dsh-dcp entry, with
-// compaction-basic disabled rather than removed-by-default.
+// Phase A — the setup.mjs lifecycle: mount → compose → remove → stock tree.
+// This is the exact pair of commands a standalone user runs (`npx dsh-dcp-setup`
+// and its `--remove`), against the profile patch file they target.
+const patchFile = path.join(profile, 'cordis.patch.yml')
+const setup = spawnSync(process.execPath, [path.join(repoRoot, 'scripts', 'setup.mjs'), patchFile], { encoding: 'utf8' })
+if (setup.status !== 0 || setup.error) fail('setup.mjs mount failed', `${setup.stdout}\n${setup.stderr}`)
+const dumpMounted = dsh(['--profile', 'smoke', '--dump-config'])
+if (dumpMounted.status !== 0 || dumpMounted.error) fail('dsh --dump-config failed on the setup-mounted profile', `${dumpMounted.stdout}\n${dumpMounted.stderr}`)
+if (!dumpMounted.stdout.includes(entryId) || !/compaction-basic\n(  name: .*\n)?  disabled: true/.test(dumpMounted.stdout)) {
+  fail('the setup-mounted tree does not carry dsh-dcp with compaction-basic disabled', dumpMounted.stdout)
+}
+const remove = spawnSync(process.execPath, [path.join(repoRoot, 'scripts', 'setup.mjs'), '--remove', patchFile], { encoding: 'utf8' })
+if (remove.status !== 0 || remove.error) fail('setup.mjs --remove failed', `${remove.stdout}\n${remove.stderr}`)
+const dumpAfter = dsh(['--profile', 'smoke', '--dump-config'])
+if (dumpAfter.status !== 0 || dumpAfter.error) fail('dsh --dump-config failed after removal', `${dumpAfter.stdout}\n${dumpAfter.stderr}`)
+if (dumpAfter.stdout.includes(entryId)) {
+  fail(`the composed tree still contains the "${entryId}" entry after removal`, dumpAfter.stdout)
+}
+if (/compaction-basic\n(  name: .*\n)?  disabled: true/.test(dumpAfter.stdout)) {
+  fail('compaction-basic is still disabled after removal — the stock backend did not come back', dumpAfter.stdout)
+}
+if (!dumpAfter.stdout.includes('compaction-basic')) {
+  fail('compaction-basic vanished from the composed tree after removal', dumpAfter.stdout)
+}
+console.log('smoke-boot: setup.mjs mount → remove lifecycle restored the stock tree')
+
+// Phase B — mount proof: the composed tree must carry the dsh-dcp entry, with
+// compaction-basic disabled rather than removed-by-default. The hand-written
+// mount points INTO the installed tarball (the true user shape), so the boot
+// below exercises the packed artifact.
+writeFileSync(path.join(profile, 'cordis.patch.yml'), `# scratch smoke profile: dsh-dcp mounted the setup.mjs way
+- id: compaction-basic
+  name: '@deepseek-ai/dsh-compaction-basic'
+  disabled: true
+- insert:
+    - id: ${entryId}
+      name: ${path.join(profile, 'node_modules', '@aiwayds', 'dsh-dcp', 'lib', 'index.js')}
+      config:
+        thresholdRatio: 0.7
+        language: zh
+`)
 const dump = dsh(['--profile', 'smoke', '--dump-config'])
 if (dump.status !== 0 || dump.error) fail('dsh --dump-config failed on the scratch profile', `${dump.stdout}\n${dump.stderr}`)
 if (!dump.stdout.includes(entryId)) {
@@ -118,5 +153,5 @@ if (boot.signal !== 'SIGKILL' && boot.status !== 0) {
   fail(`dsh exited early with code ${boot.status} and no loader error — unexpected`, output)
 }
 
-console.log(`smoke-boot: PASS — ${ownName} mounted via cordis.patch.yml (compaction-basic disabled), composed into the scratch profile tree, and booted clean in real dsh (${boot.signal === 'SIGKILL' ? `survived ${bootSeconds}s boot window` : `exited ${boot.status}`})`)
+console.log(`smoke-boot: PASS — ${ownName} mounted via cordis.patch.yml (compaction-basic disabled), composed into the scratch profile tree, booted clean in real dsh (${boot.signal === 'SIGKILL' ? `survived ${bootSeconds}s boot window` : `exited ${boot.status}`}); setup mount → remove lifecycle restored the stock tree`)
 rmSync(work, { recursive: true, force: true })

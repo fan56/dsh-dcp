@@ -84,6 +84,28 @@ npx dsh-dcp-setup                   # 安全脚本：带日期备份 → 只追�
 
 > dsh-dcp 挂在 dsh 的压缩接口上，只对挂载了它的 profile 生效。web profile 没挂 tui，继续用官方压缩，不受影响。
 
+## 卸载
+
+**Bundle 方式**（`dsh plugin add` 或列在 `bundles`）：
+
+```sh
+dsh plugin --profile <name> remove @aiwayds/dsh-dcp
+```
+
+宿主自动收敛：bundles 条目移除、patch 层随包消失，官方 LLM 压缩后端 `compaction-basic` 自动恢复。
+
+**setup 脚本方式**（`npx dsh-dcp-setup` 写入的 patch 块）：
+
+```bash
+npx dsh-dcp-setup --remove                        # 默认 home patch
+npx dsh-dcp-setup --remove --profile tui          # 指定 profile
+npx dsh-dcp-setup --remove /path/to/cordis.patch.yml
+```
+
+`--remove` 只删除 setup 写入的挂载块（含你调过的 config），修改前同样带日期备份；手工写的挂载块不受影响；删完文件为空时自动删除文件。两条 WARN 要留意：文件里若还留有 `compaction-basic` 的 disable 条目，官方压缩后端会保持关闭 —— 不是给 dsh-dcp 用的就手动删掉；同一文件里另一处 dsh-dcp 挂载不会被碰。
+
+不执行反向步骤直接卸包，patch 里的绝对路径会指向已消失的安装目录，profile 启动将以 module-not-found 失败。
+
 ## /dcp 命令
 
 | 命令 | 作用 |
