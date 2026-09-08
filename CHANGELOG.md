@@ -3,6 +3,12 @@
 All notable changes to dsh-dcp are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [0.9.0] - 2026-09-08
+
+### Added
+
+- **Bundled usage/config skill** — the plugin now registers a `dsh-dcp` skill (`skills/dsh-dcp/SKILL.md`, served through `ctx.skills.registerProvider`, same mechanism as dsh-llm-proxy/dsh-vault). When a session touches compaction tuning, `/dcp`, or persistent dcp configuration, the agent loads the guide automatically: the ten `/dcp set` keys, the `config:` section of the cordis.patch.yml mount block (managed by `dsh-dcp-setup`), an interactive `ask_user_question` tuning wizard (expectation first, then map to keys), the four trigger kinds (pressure/overflow/round/manual), and the per-session subagent counting. The hardcoded routing description is asserted verbatim against the packaged frontmatter by the new anti-drift test (`test/skill.test.mjs`).
+
 ## [0.8.0] - 2026-09-05
 
 ### Added

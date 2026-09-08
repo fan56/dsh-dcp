@@ -23,6 +23,11 @@ function mockCtx() {
     tokenMeter: {
       estimateMessage: (message) => Math.ceil(JSON.stringify(message.content ?? []).length / 4),
     },
+    skills: {
+      registerProvider() {
+        return () => {}
+      },
+    },
     __commands: commands,
   }
 }

@@ -148,6 +148,10 @@ npx dsh-dcp-setup --remove /path/to/cordis.patch.yml
 
 > **升级提示（0.5.0）**：`roundInterval` 的计数单位由 completed turn 改为 assistant message——同值下触发会更频繁（一个 turn 内往往有多条 assistant message）。
 
+## 内置技能 / Bundled skill
+
+插件随包注册了 `dsh-dcp` skill（`skills/dsh-dcp/SKILL.md`，经 `ctx.skills.registerProvider`）：在会话里让 agent 调压缩、配置 dcp 或排查压缩行为时，指南自动加载——内含 ask_user_question 交互式调参向导（先问期望再映射到具体键）与 cordis.patch.yml 挂载块 `config:` 段的持久化写法，无需翻文档。
+
 ## 设计参考
 
 - [Opencode-DCP/opencode-dynamic-context-pruning](https://github.com/Opencode-DCP/opencode-dynamic-context-pruning)

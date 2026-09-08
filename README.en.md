@@ -176,6 +176,15 @@ All optional, defaults work out of the box:
 
 > **Upgrade note (0.5.0)**: the `roundInterval` counter switched from completed turns to assistant messages — the same value now triggers more often (a single turn usually contains several assistant messages).
 
+## Bundled skill
+
+The package registers a `dsh-dcp` skill (`skills/dsh-dcp/SKILL.md`, served via
+`ctx.skills.registerProvider`): ask the agent to tune compaction, configure dcp,
+or debug compaction behavior and the guide loads automatically — it carries an
+interactive `ask_user_question` tuning wizard (collect the expectation first,
+then map it to keys) and the persistent recipe for the `config:` section of the
+cordis.patch.yml mount block.
+
 ## Design reference
 
 - [Opencode-DCP/opencode-dynamic-context-pruning](https://github.com/Opencode-DCP/opencode-dynamic-context-pruning)

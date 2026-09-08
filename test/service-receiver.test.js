@@ -37,6 +37,11 @@ function mockCtx(sessions = []) {
     commands: { register: () => () => {} },
     logger: { info: () => {}, warn: () => {} },
     tokenMeter: { estimateMessage: () => 0 },
+    skills: {
+      registerProvider() {
+        return () => {}
+      },
+    },
     sessions: { list: () => sessions },
   }
 }

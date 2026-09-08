@@ -34,6 +34,11 @@ function listenerCtx() {
     commands: { register: (command) => { commands.push(command); return () => {} } },
     logger: { info: () => {}, warn: (text) => warnings.push(text) },
     tokenMeter: { estimateMessage: () => 0 },
+    skills: {
+      registerProvider() {
+        return () => {}
+      },
+    },
     __commands: commands,
   }
 }
