@@ -14,9 +14,11 @@ import { modelSwitchNoticeText } from '../lib/summarizer.js'
 function listenerCtx() {
   const listeners = new Map()
   const warnings = []
-  return {
+  const ctx = {
     __listeners: listeners,
     __warnings: warnings,
+    /** Current priced surface size served by the token meter; tests move it to exercise the size gate. */
+    __surfaceTokens: 100000,
     on: (name, handler) => {
       if (!listeners.has(name)) listeners.set(name, [])
       listeners.get(name).push(handler)
@@ -35,9 +37,13 @@ function listenerCtx() {
     reflect: { provide: () => {} },
     commands: { register: () => () => {} },
     logger: { info: () => {}, warn: (text) => warnings.push(text) },
-    tokenMeter: { estimateMessage: () => 0 },
+    tokenMeter: {
+      estimateMessage: () => 0,
+      measure: () => ({ surfaceTokens: ctx.__surfaceTokens }),
+    },
     skills: { registerProvider() { return () => {} } },
   }
+  return ctx
 }
 
 class SwitchSpyEngine extends DcpEngine {
@@ -303,4 +309,70 @@ test('modelSwitchNoticeText covers both modes and both languages, falling back t
   assert.ok(zh.includes('a/x') && zh.includes('b/y') && !zh.includes('/dcp compact'))
   const fallback = modelSwitchNoticeText(/** @type {any} */ ('fr'), 'notice', 'a/x', 'b/y')
   assert.ok(fallback.includes('/dcp compact'))
+})
+
+test('size gate: switches below modelSwitchMinTokens are silent, at/above fire', () => {
+  const session = fakeSession('m11')
+  const ctx = listenerCtx()
+  const engine = new SwitchSpyEngine(ctx, {})
+  fire(ctx, 'session/event', session, route('a', 'm1'))
+  rounds(ctx, session, 10)
+
+  ctx.__surfaceTokens = 32767
+  fire(ctx, 'session/event', session, route('b', 'm2'))
+  assert.equal(session.appended.length, 0, 'below the default 32768 floor the switch is ignored')
+  fire(ctx, 'session/event', session, route('c', 'm3'))
+  assert.equal(session.appended.length, 0, 'still ignored — the route baseline is already m2')
+
+  ctx.__surfaceTokens = 32768
+  fire(ctx, 'session/event', session, route('d', 'm4'))
+  assert.equal(session.appended.length, 1, 'at the floor the switch fires')
+})
+
+test('size gate: modelSwitchMinTokens 0 disables it; missing meter fails open', () => {
+  const session = fakeSession('m12')
+  const ctx = listenerCtx()
+  ctx.__surfaceTokens = 100
+  const engine = new SwitchSpyEngine(ctx, { modelSwitchMinTokens: 0 })
+  fire(ctx, 'session/event', session, route('a', 'm1'))
+  rounds(ctx, session, 10)
+  fire(ctx, 'session/event', session, route('b', 'm2'))
+  assert.equal(session.appended.length, 1, '0 disables the size gate; the recency gate still ran')
+
+  const meterless = fakeSession('m13')
+  const ctx2 = listenerCtx()
+  delete /** @type {any} */ (ctx2.tokenMeter).measure
+  const engine2 = new SwitchSpyEngine(ctx2, {})
+  fire(ctx2, 'session/event', meterless, route('a', 'm1'))
+  rounds(ctx2, meterless, 10)
+  fire(ctx2, 'session/event', meterless, route('b', 'm2'))
+  assert.equal(meterless.appended.length, 1, 'meterless hosts fail open')
+})
+
+test('size gate applies to auto mode too: no compaction when the surface is small', async () => {
+  const session = fakeSession('m14')
+  const agent = { session, options: {} }
+  const ctx = listenerCtx()
+  ctx.__surfaceTokens = 5000
+  const engine = new SwitchSpyEngine(ctx, { onModelSwitch: 'auto' })
+  fire(ctx, 'session/event', session, route('a', 'm1'))
+  rounds(ctx, session, 10)
+  fire(ctx, 'session/event', session, route('b', 'm2'))
+  await idle(ctx, agent)
+  assert.equal(engine.compactNowCalls, 0, 'small surface: no announcement, no pending compaction')
+  assert.equal(session.appended.length, 0)
+})
+
+test('size gate does not touch the round trigger (separate concern)', async () => {
+  const session = fakeSession('m15')
+  const agent = { session, options: {} }
+  const ctx = listenerCtx()
+  ctx.__surfaceTokens = 1000
+  const engine = new DcpEngine(ctx, { roundInterval: 2, onModelSwitch: 'off' })
+  fire(ctx, 'session/event', session, assistantMessage(1))
+  fire(ctx, 'session/event', session, assistantMessage(1, 2))
+  await withStubbedSuper('compactNow', async () => fakeResult(), async () => {
+    await idle(ctx, agent)
+  })
+  assert.equal(engine.dcpStats.compactions, 1, 'the round interval is a count-based clock, not token-gated')
 })

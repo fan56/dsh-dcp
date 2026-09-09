@@ -1,6 +1,6 @@
 ---
 name: dsh-dcp-config
-description: "dsh 压缩引擎插件（@aiwayds/dsh-dcp）使用与配置指南。凡涉及上下文压缩、/dcp 命令、压缩调参（阈值/密度/语言/轮数触发/模型切换），或要配置 dcp 时先读本指南：/dcp 状态与 /dcp set 十一个可调键、持久化到 cordis.patch.yml 挂载块 config: 段（dsh-dcp-setup 管理）、ask_user_question 调参向导、五类触发（压力/溢出/轮数/模型切换/手动）、subagent 会话独立计数生效。触发词：dcp、压缩、compaction、上下文超限、摘要、thresholdRatio、roundInterval、onModelSwitch。"
+description: "dsh 压缩引擎插件（@aiwayds/dsh-dcp）使用与配置指南。凡涉及上下文压缩、/dcp 命令、压缩调参（阈值/密度/语言/轮数触发/模型切换），或要配置 dcp 时先读本指南：/dcp 状态与 /dcp set 十二个可调键、持久化到 cordis.patch.yml 挂载块 config: 段（dsh-dcp-setup 管理）、ask_user_question 调参向导、五类触发（压力/溢出/轮数/模型切换/手动）、subagent 会话独立计数生效。触发词：dcp、压缩、compaction、上下文超限、摘要、thresholdRatio、roundInterval、onModelSwitch。"
 ---
 
 # dsh-dcp 使用指南（确定性上下文压缩）
@@ -11,9 +11,10 @@ description: "dsh 压缩引擎插件（@aiwayds/dsh-dcp）使用与配置指南�
 
 ## 配置入口（两条路）
 
-1. **会话内临时调参**：`/dcp set <键> <值>`，只影响当前会话，重启失效。十一个可调键：
+1. **会话内临时调参**：`/dcp set <键> <值>`，只影响当前会话，重启失效。十二个可调键：
    `dedup` `purgeErrors` `maxItems` `maxItemChars` `maxSummaryTokens` `language`
-   `tokenEstimate` `thresholdRatio` `roundInterval` `notice` `onModelSwitch`。
+   `tokenEstimate` `thresholdRatio` `roundInterval` `notice` `onModelSwitch`
+   `modelSwitchMinTokens`。
 2. **持久化**：cordis.patch.yml 里 dsh-dcp 挂载块的 `config:` 段。用
    `npx dsh-dcp-setup` 写入并维护（带 marker 注释、改动前日期备份、幂等）；
    `--remove` 只删 setup 写的块，手工写的块不受影响。bundle 方式
@@ -48,7 +49,8 @@ dsh-dcp 自有键（除 `thresholdRatio` 外全部可用 `/dcp set` 调）：
 | `protectedTools` | `['write', 'edit', 'apply_patch']` | 写侧工具（子串匹配）的重复调用不折叠进 dedup 标注 |
 | `roundInterval` | 50 | 每 N 条 assistant message（一次 LLM 往返）触发一次压缩；`0` 关闭 |
 | `notice` | `true` | 压缩后在会话追加一行通知 |
-| `onModelSwitch` | `notice` | 模型切换后：`notice` 提醒执行 `/dcp compact`；`auto` 下一个空闲点自动压缩；`off` 关闭。距上次压缩不足 10 条消息的切换忽略不计 |
+| `onModelSwitch` | `notice` | 模型切换后：`notice` 提醒执行 `/dcp compact`；`auto` 下一个空闲点自动压缩；`off` 关闭 |
+| `modelSwitchMinTokens` | 32768 | 模型切换提醒/自动压缩的上下文下限（宿主 tokenMeter 实测）：不足则忽略该次切换；`0` 关闭此门 |
 
 转发上游 compaction-basic 的策略键：`thresholdRatio`（上游默认 0.8；**本插件 bundle 挂载默认 0.7**，中文场景建议 0.7）、`retainRatio`、`retainTokens`、`maxTokens`、`summarizationProvider`、`summarizationModel`、`compactionRetries`、`maxOverflowRetries`、`modelPolicies`、`auto`。
 
@@ -77,7 +79,7 @@ dsh-dcp 自有键（除 `thresholdRatio` 外全部可用 `/dcp set` 调）：
 | 压力 | 每步请求前 | token ≥ `thresholdRatio` × 上下文窗口 |
 | 溢出 | 模型报 context 超限 | 继承官方恢复流程 |
 | 轮数 | 每累计 `roundInterval` 条 assistant message | 任何一次压缩（含压力/手动）都重置时钟；`0` 关闭；需保持 `auto: true`（默认开） |
-| 模型切换 | 会话实际路由的 provider/model 变化 | `onModelSwitch` 控制（默认 `notice` 提醒）；`auto` 在下一个空闲点自动压缩；距上次压缩不足 10 条消息忽略 |
+| 模型切换 | 会话实际路由的 provider/model 变化 | `onModelSwitch` 控制（默认 `notice` 提醒）；`auto` 在下一个空闲点自动压缩；两道门：距上次压缩 <10 条消息、上下文 <`modelSwitchMinTokens` |
 | 手动 | `/dcp compact`、`/compact` | 随时可用 |
 
 - **subagent 同样生效**：进程内子代理（含 continuable 与 one-shot）走同一套事件分发，

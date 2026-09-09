@@ -5,7 +5,7 @@ import { executeDcp } from '../lib/command.js'
 
 function mockEngine() {
   return {
-    dcp: { dedup: true, purgeErrors: true, maxItems: 10, maxItemChars: 200, maxSummaryTokens: 2048, language: 'en', tokenEstimate: 'cjk', protectedTools: [], roundInterval: 50, notice: true },
+    dcp: { dedup: true, purgeErrors: true, maxItems: 10, maxItemChars: 200, maxSummaryTokens: 2048, language: 'en', tokenEstimate: 'cjk', protectedTools: [], roundInterval: 50, notice: true, onModelSwitch: 'notice', modelSwitchMinTokens: 32768 },
     config: Object.freeze({ thresholdRatio: 0.8, retainRatio: 0.16 }),
     dcpStats: { compactions: 2, shadowedTokens: 1234, lastAt: null },
     pluginPath: '/x/dsh-dcp/lib/index.js',
@@ -106,6 +106,29 @@ test('/dcp set adjusts roundInterval and notice', async () => {
   const status = await executeDcp(identityCtx(), invocation(''), engine, 'v')
   assert.ok(status.text.includes('roundInterval=0'))
   assert.ok(status.text.includes('notice=false'))
+})
+
+test('/dcp set adjusts onModelSwitch and modelSwitchMinTokens', async () => {
+  const engine = mockEngine()
+  const auto = await executeDcp(identityCtx(), invocation('set onModelSwitch auto'), engine, 'v')
+  assert.equal(auto.kind, 'success')
+  assert.equal(engine.dcp.onModelSwitch, 'auto')
+  const badMode = await executeDcp(identityCtx(), invocation('set onModelSwitch sometimes'), engine, 'v')
+  assert.equal(badMode.kind, 'error')
+  assert.ok(badMode.text.includes('off/notice/auto'))
+
+  const minTokens = await executeDcp(identityCtx(), invocation('set modelSwitchMinTokens 65536'), engine, 'v')
+  assert.equal(minTokens.kind, 'success')
+  assert.equal(engine.dcp.modelSwitchMinTokens, 65536)
+  const zero = await executeDcp(identityCtx(), invocation('set modelSwitchMinTokens 0'), engine, 'v')
+  assert.equal(zero.kind, 'success')
+  assert.ok(zero.text.includes('disabled'))
+  const badTokens = await executeDcp(identityCtx(), invocation('set modelSwitchMinTokens -5'), engine, 'v')
+  assert.equal(badTokens.kind, 'error')
+
+  const status = await executeDcp(identityCtx(), invocation(''), engine, 'v')
+  assert.ok(status.text.includes('onModelSwitch=auto'))
+  assert.ok(status.text.includes('minTokens=0 (off)'))
 })
 
 test('/dcp set rejects bad input and guards retainRatio', async () => {
