@@ -58,6 +58,6 @@ test('resolveDcpConfig defaults and validates roundInterval and notice', () => {
 
 test('runtime settable keys are a closed documented set', () => {
   assert.deepEqual(Object.keys(RUNTIME_SETTABLE).sort(), [
-    'dedup', 'language', 'maxItemChars', 'maxItems', 'maxSummaryTokens', 'notice', 'purgeErrors', 'roundInterval', 'thresholdRatio', 'tokenEstimate',
+    'dedup', 'language', 'maxItemChars', 'maxItems', 'maxSummaryTokens', 'notice', 'onModelSwitch', 'purgeErrors', 'roundInterval', 'thresholdRatio', 'tokenEstimate',
   ])
 })

@@ -137,7 +137,7 @@ Removing the package without the reverse step leaves the mount pointing at the v
 
 Settable: `dedup`, `purgeErrors`, `maxItems`, `maxItemChars`,
 `maxSummaryTokens`, `language`, `tokenEstimate`, `thresholdRatio`,
-`roundInterval`, `notice`.
+`roundInterval`, `notice`, `onModelSwitch`.
 
 The `/dcp` status also lists every session that has compacted (subagents
 included): `per-session: session-1 (2 compactions, ~444 tokens), child
@@ -153,9 +153,11 @@ for the rest) so the status stays one line.
 | Pressure | before every step | tokens ≥ `thresholdRatio` (inherited upstream default 0.8; this plugin's bundle mounts 0.7 — see config table) × context window |
 | Overflow recovery | on a provider context-window error | inherited |
 | **Round interval** | every `roundInterval` assistant messages | added by this plugin; one round = one LLM roundtrip (each tool-iteration response counts, so one-shot subagents trigger too). **Default 50**: first compaction after message 50, then every 50 more (100, 150, …); any compaction (pressure included) restarts the clock. Fires at the first idle boundary after the count is reached (below the pressure threshold too). `0` disables; requires the default `auto: true` |
+| **Model switch** | the session's effective provider/model route changes | added by this plugin (`onModelSwitch`). Default `notice`: appends one row suggesting `/dcp compact` first to shadow the old model's history and save tokens; `auto` compacts at the session's next idle boundary; `off` disables. Switches within 10 assistant messages of the last compaction are ignored (nothing stale to shadow); `auto` requires the default `auto: true`, otherwise it degrades to `notice` |
 | Manual | `/dcp compact`, `/compact` | anytime |
 
-- **Subagents are covered**: in-process subagents (including continuable and one-shot children) dispatch through the same events, so pressure/overflow/round triggers count and fire per child session independently. The round trigger counts assistant messages, so a one-shot subagent whose whole run is a single turn (many tool iterations) triggers too.
+- **Subagents are covered**: in-process subagents (including continuable and one-shot children) dispatch through the same events, so pressure/overflow/round/model-switch triggers count and fire per child session independently. The round trigger counts assistant messages, so a one-shot subagent whose whole run is a single turn (many tool iterations) triggers too.
+- **How model-switch detection works**: the per-request `request/context` routing snapshot is folded per session (a provider or model change alone counts as a switch), covering every switch entry point — TUI `/model`, web clients, changed default-model settings. A session's first observed request only seeds the baseline. `notice: false` silences the compaction rows only; the switch row is controlled by `onModelSwitch` independently.
 - **Visibility**: after every trigger event a one-line notice row (`dcp: compacted N history items (~X tokens, trigger)`) is appended to the session; frontends render it as a collapsed row. Note the row also rides the model request context (~15–25 tokens per compaction), and it is **on by default since 0.4.0** — disable with `notice: false`. `/dcp` stats count every committed region (a pressure retry loop may commit several).
 
 ## Configuration
@@ -166,6 +168,7 @@ All optional, defaults work out of the box:
 |---|---|---|
 | `thresholdRatio` | 0.8 | pressure trigger (inherited upstream compaction-basic default 0.8; this plugin's bundle patch mounts 0.7, recommended for CJK-heavy sessions) |
 | `roundInterval` | 50 | compact every N assistant messages (one LLM roundtrip) (0 disables). Default 50: 50, 100, 150… — the clock restarts after every compaction |
+| `onModelSwitch` | `notice` | after a model switch: `notice` suggests `/dcp compact` (default); `auto` compacts at the next idle boundary; `off` disables. Switches within 10 messages of the last compaction are ignored |
 | `notice` | `true` | append the one-line compaction notice to the session |
 | `language` | `zh` | summary language; `zh` also enables Chinese error/"待办：" detection |
 | `tokenEstimate` | `cjk` | CJK (zh/ja/ko/full-width) at ~2 chars/token; `ascii` matches the host |

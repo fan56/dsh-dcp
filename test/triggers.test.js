@@ -166,8 +166,14 @@ test('roundInterval 0 (explicit off) and auto: false never trigger', async () =>
   fire(off.ctx, 'agent/status', { agent, status: 'idle' })
   assert.equal(off.engine.compactNowCalls, 0)
 
+  // auto: false skips the round trigger's idle listener; the assistant-message
+  // counter stays registered unconditionally (the model-switch recency gate
+  // reads it, and `/dcp set roundInterval N` can arm the trigger mid-session).
   const manual = armedEngine({ roundInterval: 1, auto: false })
-  assert.equal(manual.ctx.__listeners.has('session/event'), false)
+  fire(manual.ctx, 'session/event', agent.session, assistantMessage(1))
+  fire(manual.ctx, 'agent/status', { agent, status: 'idle' })
+  await new Promise((resolve) => setTimeout(resolve, 0))
+  assert.equal(manual.engine.compactNowCalls, 0, 'auto: false never compacts on its own')
 })
 
 test('recordCompaction appends a bounded notice row and bumps /dcp stats', () => {
