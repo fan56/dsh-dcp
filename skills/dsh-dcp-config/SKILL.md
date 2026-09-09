@@ -1,5 +1,5 @@
 ---
-name: dsh-dcp
+name: dsh-dcp-config
 description: "dsh 压缩引擎插件（@aiwayds/dsh-dcp）使用与配置指南。凡涉及上下文压缩、/dcp 命令、压缩调参（阈值/密度/语言/轮数触发），或要配置 dcp 时先读本指南：/dcp 状态与 /dcp set 十个可调键、持久化到 cordis.patch.yml 挂载块 config: 段（dsh-dcp-setup 管理）、ask_user_question 调参向导、四类触发（压力/溢出/轮数/手动）、subagent 会话独立计数生效。触发词：dcp、压缩、compaction、上下文超限、摘要、thresholdRatio、roundInterval。"
 ---
 

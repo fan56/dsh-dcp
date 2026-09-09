@@ -22,13 +22,13 @@ function frontmatterValue(markdown, key) {
 
 test('provider exposes the bundled dsh-dcp candidate with valid metadata', async () => {
   assert.equal(skillProvider.name, SKILL_PROVIDER_NAME)
-  assert.equal(SKILL_PROVIDER_NAME, 'dsh-dcp')
+  assert.equal(SKILL_PROVIDER_NAME, 'dsh-dcp-config')
 
   const candidates = await skillProvider.list({})
   assert.equal(candidates.length, 1)
   const candidate = candidates[0]
-  assert.equal(candidate.name, 'dsh-dcp')
-  assert.equal(candidate.provider, 'dsh-dcp')
+  assert.equal(candidate.name, 'dsh-dcp-config')
+  assert.equal(candidate.provider, 'dsh-dcp-config')
   assert.equal(candidate.source, 'bundled')
   assert.equal(typeof candidate.rank, 'number')
   assert.ok(Number.isFinite(candidate.rank))
@@ -40,7 +40,7 @@ test('provider exposes the bundled dsh-dcp candidate with valid metadata', async
   // (fileURLToPath keeps the trailing slash of the URL path).
   assert.equal(candidate.resourceBase.kind, 'directory')
   assert.ok(
-    candidate.resourceBase.path.replace(/\/$/, '').endsWith('skills/dsh-dcp'),
+    candidate.resourceBase.path.replace(/\/$/, '').endsWith('skills/dsh-dcp-config'),
     `unexpected resourceBase path: ${candidate.resourceBase.path}`,
   )
 })
@@ -49,8 +49,8 @@ test('provider.get loads the packaged SKILL.md with matching metadata', async ()
   const [candidate] = await skillProvider.list({})
 
   const definition = await skillProvider.get(candidate, {})
-  assert.equal(definition.name, 'dsh-dcp')
-  assert.equal(definition.provider, 'dsh-dcp')
+  assert.equal(definition.name, 'dsh-dcp-config')
+  assert.equal(definition.provider, 'dsh-dcp-config')
   assert.equal(definition.description, candidate.description)
   // SkillDefinition.content is the instruction body after metadata removal:
   // the bundled get() must strip the raw frontmatter the file keeps for the
@@ -60,8 +60,8 @@ test('provider.get loads the packaged SKILL.md with matching metadata', async ()
 
   // Anti-drift: the hardcoded routing description must equal the SKILL.md
   // frontmatter, and the frontmatter itself must satisfy the registry grammar.
-  const markdown = await readFile(new URL('../skills/dsh-dcp/SKILL.md', import.meta.url), 'utf8')
-  assert.equal(frontmatterValue(markdown, 'name'), 'dsh-dcp')
+  const markdown = await readFile(new URL('../skills/dsh-dcp-config/SKILL.md', import.meta.url), 'utf8')
+  assert.equal(frontmatterValue(markdown, 'name'), 'dsh-dcp-config')
   assert.equal(frontmatterValue(markdown, 'description'), SKILL_DESCRIPTION)
   assert.equal(SKILL_DESCRIPTION, candidate.description)
 })

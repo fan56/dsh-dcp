@@ -3,6 +3,11 @@
 All notable changes to dsh-dcp are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [0.9.1] - 2026-09-09
+
+### Changed
+- The bundled skill is renamed `dsh-dcp` → `dsh-dcp-config` (ecosystem-wide convention: config/usage-guide skills end with `-config`). Bundled skills are registered in-process with zero on-disk footprint — updating the package and restarting dsh migrates the name automatically; the old `/dsh-dcp` slash invocation stops resolving. README skill mentions updated.
+
 ## [0.9.0] - 2026-09-08
 
 ### Added

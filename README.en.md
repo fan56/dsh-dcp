@@ -178,7 +178,7 @@ All optional, defaults work out of the box:
 
 ## Bundled skill
 
-The package registers a `dsh-dcp` skill (`skills/dsh-dcp/SKILL.md`, served via
+The package registers a `dsh-dcp-config` skill (`skills/dsh-dcp-config/SKILL.md`, served via
 `ctx.skills.registerProvider`): ask the agent to tune compaction, configure dcp,
 or debug compaction behavior and the guide loads automatically — it carries an
 interactive `ask_user_question` tuning wizard (collect the expectation first,
