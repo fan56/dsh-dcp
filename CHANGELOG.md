@@ -3,6 +3,12 @@
 All notable changes to dsh-dcp are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [Unreleased]
+
+### Changed
+
+- **The bare `/dcp` now compacts** — no-argument invocation runs the same manual deterministic compaction as `/dcp compact` (zero LLM), so the common action takes no subcommand. The was-status bare behavior moves behind `/dcp status`; `help` / `--help` / `-h` print the usage (with an input hint advertising the verbs). `/dcp set` is unchanged. Both READMEs, the bundled `dsh-dcp-config` skill, and the `dsh-dcp-setup` post-install hint (`/dcp status` to verify) follow.
+
 ## [0.10.0] - 2026-09-10
 
 ### Added

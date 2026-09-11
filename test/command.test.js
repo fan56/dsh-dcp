@@ -19,8 +19,26 @@ const invocation = (rawInput, extra = {}) => ({
 
 const identityCtx = () => ({ compaction: { compactNow: async () => null } })
 
-test('/dcp with no arguments shows status', async () => {
-  const result = await executeDcp(identityCtx(), invocation(''), mockEngine(), '1.2.3')
+test('/dcp with no arguments compacts now', async () => {
+  const ok = { shadowedSeqs: [1, 2], shadowedTokenCount: 321, summarySeq: 7 }
+  const result = await executeDcp({ compaction: { compactNow: async () => ok } }, invocation(''), mockEngine(), '1.2.3')
+  assert.equal(result.kind, 'success')
+  assert.ok(result.text.includes('2 history items'))
+  assert.equal(result.sourceEventSeq, 7)
+
+  const empty = await executeDcp(identityCtx(), invocation(''), mockEngine(), '1.2.3')
+  assert.ok(empty.text.includes('No compactable history'))
+})
+
+test('/dcp compact is the same seam as the bare command', async () => {
+  const ok = { shadowedSeqs: [1], shadowedTokenCount: 5, summarySeq: 3 }
+  const result = await executeDcp({ compaction: { compactNow: async () => ok } }, invocation('   compact  '), mockEngine(), 'v')
+  assert.equal(result.kind, 'success')
+  assert.equal(result.sourceEventSeq, 3)
+})
+
+test('/dcp status shows the engine block', async () => {
+  const result = await executeDcp(identityCtx(), invocation('status'), mockEngine(), '1.2.3')
   assert.equal(result.kind, 'success')
   assert.ok(result.text.includes('dsh-dcp 1.2.3'))
   assert.ok(result.text.includes('dedup=true'))
@@ -34,13 +52,13 @@ test('/dcp status lists per-session compactions for compacted sessions', async (
     { id: 'top', compactions: 2, shadowedTokens: 444 },
     { id: 'child', compactions: 1, shadowedTokens: 22 },
   ]
-  const result = await executeDcp(identityCtx(), invocation(''), engine, '1.2.3')
+  const result = await executeDcp(identityCtx(), invocation('status'), engine, '1.2.3')
   assert.equal(result.kind, 'success')
   assert.ok(result.text.includes('per-session: top (2 compactions, ~444 tokens), child (1 compaction, ~22 tokens)'))
 })
 
 test('/dcp status omits the per-session line when nothing has compacted', async () => {
-  const result = await executeDcp(identityCtx(), invocation(''), mockEngine(), '1.2.3')
+  const result = await executeDcp(identityCtx(), invocation('status'), mockEngine(), '1.2.3')
   assert.ok(!result.text.includes('per-session:'))
 })
 
@@ -48,7 +66,7 @@ test('/dcp status caps the per-session line at 10 sessions with +N more', async 
   const engine = mockEngine()
   engine.sessionStatsOverview = () =>
     Array.from({ length: 11 }, (_, i) => ({ id: `session-${i + 1}`, compactions: 1, shadowedTokens: 10 }))
-  const result = await executeDcp(identityCtx(), invocation(''), engine, '1.2.3')
+  const result = await executeDcp(identityCtx(), invocation('status'), engine, '1.2.3')
   assert.ok(result.text.includes('per-session: session-1'))
   assert.ok(result.text.includes('session-10'))
   assert.ok(!result.text.includes('session-11'), 'the 11th session is capped off the line')
@@ -59,14 +77,18 @@ test('/dcp status shows no +N more when exactly 10 sessions compacted', async ()
   const engine = mockEngine()
   engine.sessionStatsOverview = () =>
     Array.from({ length: 10 }, (_, i) => ({ id: `session-${i + 1}`, compactions: 1, shadowedTokens: 10 }))
-  const result = await executeDcp(identityCtx(), invocation(''), engine, '1.2.3')
+  const result = await executeDcp(identityCtx(), invocation('status'), engine, '1.2.3')
   assert.ok(result.text.includes('session-10'))
   assert.ok(!result.text.includes('more'), 'exactly 10 sessions fit with no +N more')
 })
 
 test('/dcp help and unknown subcommands', async () => {
-  const help = await executeDcp(identityCtx(), invocation('help'), mockEngine(), '1.2.3')
-  assert.ok(help.text.includes('/dcp compact'))
+  for (const verb of ['help', '--help', '-h']) {
+    const help = await executeDcp(identityCtx(), invocation(verb), mockEngine(), '1.2.3')
+    assert.equal(help.kind, 'success', `${verb} shows help`)
+    assert.ok(help.text.includes('/dcp compact'))
+    assert.ok(help.text.includes('/dcp status'))
+  }
   const unknown = await executeDcp(identityCtx(), invocation('frobnicate'), mockEngine(), '1.2.3')
   assert.equal(unknown.kind, 'error')
   assert.ok(unknown.text.includes('unknown subcommand'))
@@ -103,7 +125,7 @@ test('/dcp set adjusts roundInterval and notice', async () => {
   assert.ok(bad.text.includes('0 or a positive integer'))
   await executeDcp(identityCtx(), invocation('set notice off'), engine, 'v')
   assert.equal(engine.dcp.notice, false)
-  const status = await executeDcp(identityCtx(), invocation(''), engine, 'v')
+  const status = await executeDcp(identityCtx(), invocation('status'), engine, 'v')
   assert.ok(status.text.includes('roundInterval=0'))
   assert.ok(status.text.includes('notice=false'))
 })
@@ -126,7 +148,7 @@ test('/dcp set adjusts onModelSwitch and modelSwitchMinTokens', async () => {
   const badTokens = await executeDcp(identityCtx(), invocation('set modelSwitchMinTokens -5'), engine, 'v')
   assert.equal(badTokens.kind, 'error')
 
-  const status = await executeDcp(identityCtx(), invocation(''), engine, 'v')
+  const status = await executeDcp(identityCtx(), invocation('status'), engine, 'v')
   assert.ok(status.text.includes('onModelSwitch=auto'))
   assert.ok(status.text.includes('minTokens=0 (off)'))
 })

@@ -110,13 +110,16 @@ npx dsh-dcp-setup --remove /path/to/cordis.patch.yml
 
 | 命令 | 作用 |
 |---|---|
-| `/dcp` | 状态：配置、压缩次数、省下的 token |
-| `/dcp compact` | 立即压缩（零 LLM） |
+| `/dcp` | 立即压缩（零 LLM）；等同于 `/dcp compact` |
+| `/dcp status` | 状态：配置、压缩次数、省下的 token |
+| `/dcp help` / `--help` / `-h` | 显示命令用法 |
 | `/dcp set <k> <v>` | 会话内调参，并提示如何持久化 |
 
 可调键：`dedup`、`purgeErrors`、`maxItems`、`maxItemChars`、`maxSummaryTokens`、`language`、`tokenEstimate`、`thresholdRatio`、`roundInterval`、`notice`、`onModelSwitch`、`modelSwitchMinTokens`。
 
-`/dcp` 状态还会列出每个发生过压缩的会话（per-session 概览，含子代理），例如 `per-session: session-1 (2 compactions, ~444 tokens), child (1 compaction, ~22 tokens)`。压缩按会话独立计数；已销毁的会话（含 one-shot 子代理）自动从概览消失；列表封顶一行（最多前 10 个会话，超出显示 `+N more`）。
+裸 `/dcp` 与 `/dcp compact` 走同一条手动压缩缝——最常用的动作零参数直达，不必记子命令；只读或调参的动作留在显式子命令后面（看状态打 `/dcp status`，用法打 `/dcp help`）。
+
+`/dcp status` 还会列出每个发生过压缩的会话（per-session 概览，含子代理），例如 `per-session: session-1 (2 compactions, ~444 tokens), child (1 compaction, ~22 tokens)`。压缩按会话独立计数；已销毁的会话（含 one-shot 子代理）自动从概览消失；列表封顶一行（最多前 10 个会话，超出显示 `+N more`）。
 
 ## 触发条件
 
@@ -126,11 +129,11 @@ npx dsh-dcp-setup --remove /path/to/cordis.patch.yml
 | 溢出恢复 | 模型报 context 超限时 | 继承官方 |
 | **轮数触发** | 会话每收到 `roundInterval` 条 assistant message | 本插件新增；一条 = 一次 LLM 往返（每轮工具迭代各算一条，one-shot 子代理也能触发）。**默认 50**：第 50 条后触发第一次，之后每 50 条一次（100、150……）；任何一次压缩（含压力触发）都会重置轮数时钟。到达条数后的第一个空闲点触发（阈值之下也压）。`0` 关闭；需保持 `auto: true`（默认开） |
 | **模型切换** | 会话实际路由的 provider/model 变化时 | 本插件新增（`onModelSwitch`）。默认 `notice`：追加一行提醒"建议先执行 `/dcp compact` 压缩旧模型历史，节省 token"；`auto` 在该会话下一个空闲点自动压缩；`off` 关闭。两道门控：距上次压缩不足 10 条 assistant message 忽略（没有旧账可甩），上下文不足 `modelSwitchMinTokens`（默认 32768，`0` 关闭该门）忽略（不够甩的量）；`auto` 需保持 `auto: true`（默认开），否则降级为 `notice` |
-| 手动 | `/dcp compact`、`/compact` | 随时可用 |
+| 手动 | `/dcp`（无参数）、`/dcp compact`、`/compact` | 随时可用 |
 
 - **subagent 同样生效**：进程内 subagent（含 continuable 与 one-shot 子代理）走同一套事件分发，压力/溢出/轮数/模型切换对子会话独立计数、独立触发。轮数触发按 assistant message 计数，所以全程只有 1 个 turn 的 one-shot 子代理（多次工具迭代）也能触发。
 - **模型切换检测原理**：折叠每请求的 `request/context` 路由快照（provider 或 model 任一变化即判定切换），覆盖所有切换入口（TUI `/model`、Web 客户端、默认模型设置变更）；会话首个请求只播种基线不告警。`notice: false` 只关压缩通知行，模型切换提醒行由 `onModelSwitch` 独立控制。上下文下限按宿主 tokenMeter 的实测计价（`measure().surfaceTokens`），测不到时 fail-open（只留轮数门控）。
-- **压缩可见性**：每次压缩成功后，会话里追加一行 `dcp: 已压缩 N 条历史（约 X tokens，触发方式）` 通知行（前端渲染为折叠行）。注意该行也会作为上下文随请求发给模型（每次压缩约 15–25 tokens），且 **0.4.0 起默认开启**；`notice: false` 可关闭。`/dcp` 的 stats 持续累计（压力触发的多次 region 提交各计一次）。
+- **压缩可见性**：每次压缩成功后，会话里追加一行 `dcp: 已压缩 N 条历史（约 X tokens，触发方式）` 通知行（前端渲染为折叠行）。注意该行也会作为上下文随请求发给模型（每次压缩约 15–25 tokens），且 **0.4.0 起默认开启**；`notice: false` 可关闭。`/dcp status` 的 stats 持续累计（压力触发的多次 region 提交各计一次）。
 
 ## 配置
 

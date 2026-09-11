@@ -1,6 +1,6 @@
 ---
 name: dsh-dcp-config
-description: "dsh 压缩引擎插件（@aiwayds/dsh-dcp）使用与配置指南。凡涉及上下文压缩、/dcp 命令、压缩调参（阈值/密度/语言/轮数触发/模型切换），或要配置 dcp 时先读本指南：/dcp 状态与 /dcp set 十二个可调键、持久化到 cordis.patch.yml 挂载块 config: 段（dsh-dcp-setup 管理）、ask_user_question 调参向导、五类触发（压力/溢出/轮数/模型切换/手动）、subagent 会话独立计数生效。触发词：dcp、压缩、compaction、上下文超限、摘要、thresholdRatio、roundInterval、onModelSwitch。"
+description: "dsh 压缩引擎插件（@aiwayds/dsh-dcp）使用与配置指南。凡涉及上下文压缩、/dcp 命令、压缩调参（阈值/密度/语言/轮数触发/模型切换），或要配置 dcp 时先读本指南：裸 /dcp 即压缩、/dcp status 看状态与 /dcp set 十二个可调键、持久化到 cordis.patch.yml 挂载块 config: 段（dsh-dcp-setup 管理）、ask_user_question 调参向导、五类触发（压力/溢出/轮数/模型切换/手动）、subagent 会话独立计数生效。触发词：dcp、压缩、compaction、上下文超限、摘要、thresholdRatio、roundInterval、onModelSwitch。"
 ---
 
 # dsh-dcp 使用指南（确定性上下文压缩）
@@ -80,7 +80,7 @@ dsh-dcp 自有键（除 `thresholdRatio` 外全部可用 `/dcp set` 调）：
 | 溢出 | 模型报 context 超限 | 继承官方恢复流程 |
 | 轮数 | 每累计 `roundInterval` 条 assistant message | 任何一次压缩（含压力/手动）都重置时钟；`0` 关闭；需保持 `auto: true`（默认开） |
 | 模型切换 | 会话实际路由的 provider/model 变化 | `onModelSwitch` 控制（默认 `notice` 提醒）；`auto` 在下一个空闲点自动压缩；两道门：距上次压缩 <10 条消息、上下文 <`modelSwitchMinTokens` |
-| 手动 | `/dcp compact`、`/compact` | 随时可用 |
+| 手动 | `/dcp`（无参数）、`/dcp compact`、`/compact` | 随时可用 |
 
 - **subagent 同样生效**：进程内子代理（含 continuable 与 one-shot）走同一套事件分发，
   压力/溢出/轮数/模型切换对每个会话独立计数、独立触发。
@@ -89,8 +89,9 @@ dsh-dcp 自有键（除 `thresholdRatio` 外全部可用 `/dcp set` 调）：
 
 ## 排障
 
-1. `/dcp`（无参数）看状态：当前配置、压缩次数、省下的 LLM 调用，以及
+1. `/dcp status` 看状态：当前配置、压缩次数、省下的 LLM 调用，以及
    per-session 概览（含子代理；已销毁的会话自动消失，列表最多前 10 个，超出显示 `+N more`）。
+   手动压缩打裸 `/dcp`（或 `/dcp compact`）；命令用法打 `/dcp help`。
 2. 会话压不动 → 先确认 `auto` 是否为 `true`（自动触发总开关，默认开），再看
    `thresholdRatio` 是否设得过高、`roundInterval` 是否为 `0`。
 3. `npx dsh-dcp-setup --remove` 后出现 `WARN: a compaction-basic entry remains...` →

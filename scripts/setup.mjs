@@ -124,4 +124,4 @@ if (existed) {
 fs.mkdirSync(path.dirname(target), { recursive: true })
 fs.appendFileSync(target, plan.block)
 console.log(`${plan.action === 'create' ? 'created' : 'patched'} ${target}`)
-console.log('restart dsh, then run /dcp to verify.')
+console.log('restart dsh, then run /dcp status to verify.')
