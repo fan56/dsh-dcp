@@ -104,17 +104,23 @@ jobs:
         # The registry sometimes commits the write and loses the response —
         # a green publish exit code is NOT proof. `npm view` seeing the
         # version is the only acceptance signal.
+        #
+        # The window must outlast npm's packument propagation, which the
+        # v0.11.0 release measured at ~50s (its 6×5s = 30s window failed on a
+        # publish that had in fact landed). Budget ~2 min of retries before
+        # declaring the publish lost; a failed publish is indistinguishable
+        # from a slow one until the window closes.
         run: |
           TAG_VERSION="${GITHUB_REF_NAME#v}"
-          for attempt in 1 2 3 4 5 6; do
+          for attempt in $(seq 1 12); do
             if npm view "@aiwayds/dsh-dcp@${TAG_VERSION}" version >/dev/null 2>&1; then
               echo "verified: @aiwayds/dsh-dcp@${TAG_VERSION} is visible on the registry (attempt ${attempt})"
               exit 0
             fi
-            echo "attempt ${attempt}: not visible yet; waiting 5s"
-            sleep 5
+            echo "attempt ${attempt}/12: not visible yet; waiting 10s"
+            sleep 10
           done
-          echo "::error::publish reported success but npm view never saw @aiwayds/dsh-dcp@${TAG_VERSION} — inspect the registry manually before trusting this release"
+          echo "::error::publish reported success but npm view never saw @aiwayds/dsh-dcp@${TAG_VERSION} after ~2 min — inspect the registry manually before trusting this release"
           exit 1
 
   release:
