@@ -119,6 +119,8 @@ npx dsh-dcp-setup --remove /path/to/cordis.patch.yml
 
 裸 `/dcp` 与 `/dcp compact` 走同一条手动压缩缝——最常用的动作零参数直达，不必记子命令；只读或调参的动作留在显式子命令后面（看状态打 `/dcp status`，用法打 `/dcp help`）。
 
+> **0.11.0 起语义变更**：裸 `/dcp` 由「显示状态」改为「立即压缩」，原来的状态输出移到 `/dcp status`。升级后别再用裸 `/dcp` 查状态——它会直接压一次。
+
 `/dcp status` 还会列出每个发生过压缩的会话（per-session 概览，含子代理），例如 `per-session: session-1 (2 compactions, ~444 tokens), child (1 compaction, ~22 tokens)`。压缩按会话独立计数；已销毁的会话（含 one-shot 子代理）自动从概览消失；列表封顶一行（最多前 10 个会话，超出显示 `+N more`）。
 
 ## 触发条件

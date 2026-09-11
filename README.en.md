@@ -145,6 +145,10 @@ the common action takes zero arguments, so nobody has to remember a
 subcommand, while the read-only and tuning verbs stay behind explicit
 arguments (`/dcp status` for the block, `/dcp help` for usage).
 
+> **Behavior change in 0.11.0**: the bare `/dcp` now compacts instead of
+> showing status; the status output moved to `/dcp status`. After
+> upgrading, use `/dcp status` to inspect — the bare command compacts.
+
 The `/dcp status` block also lists every session that has compacted (subagents
 included): `per-session: session-1 (2 compactions, ~444 tokens), child
 (1 compaction, ~22 tokens)`. Compactions count per session; disposed
