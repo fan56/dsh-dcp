@@ -2,7 +2,7 @@
 
 dsh（DeepSeek Harness）的确定性压缩后端：**上下文压缩不调 LLM**，开箱即用。
 
-**要求 dsh >= 0.1.5-rc.2** — 本插件只跟随 dsh RC/stable 线（CI 与发版在运行时解析 latest/next 中更新的 dist-tag）。**不再支持 alpha 线。**
+**要求 dsh >= 0.1.7-rc.1** — 本插件只跟随 dsh RC/stable 线（CI 与发版在运行时解析 latest/next 中更新的 dist-tag）。**不再支持 alpha 线。**
 
 > **简体中文** · [English](README.en.md)
 
@@ -144,6 +144,7 @@ npx dsh-dcp-setup --remove /path/to/cordis.patch.yml
 | 键 | 默认 | 说明 |
 |---|---|---|
 | `thresholdRatio` | 0.8 | 压力触发阈值（继承上游 compaction-basic 默认 0.8；本插件 bundle patch 挂载时默认 0.7，中文场景建议 0.7） |
+| `headroomTokens` | 65536 | 继承上游 compaction-basic（0.1.7 新增）：压力预算额外余量（非负整数）。压力上限 = 上下文窗口 − 路由请求预留输出（`maxTokens`）− 本余量；小窗口模型建议下调 |
 | `roundInterval` | 50 | 每 N 条 assistant message（一次 LLM 往返）触发一次压缩（0 关闭）。默认 50：50、100、150……每次压缩后重数 |
 | `onModelSwitch` | `notice` | 模型切换后：`notice` 提醒执行 `/dcp compact`（默认）；`auto` 下一个空闲点自动压缩；`off` 关闭 |
 | `modelSwitchMinTokens` | 32768 | 模型切换提醒/自动压缩的上下文下限（按宿主 tokenMeter 实测计价）：不足则忽略该次切换；`0` 关闭此门。默认 32k ≈ 压缩后基线（~16% 窗口）之上再涨一截才有得甩 |
@@ -169,7 +170,7 @@ npx dsh-dcp-setup --remove /path/to/cordis.patch.yml
 ## 开发
 
 ```bash
-npm install && npm test     # 65 个用例：抽取/压缩/命令/配置/触发/安装脚本
+npm install && npm test     # 109 个用例：抽取/压缩/命令/配置/触发/恢复缝/安装脚本
 ```
 
 ## License

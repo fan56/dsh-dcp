@@ -3,7 +3,7 @@
 Deterministic context-compaction backend for dsh (DeepSeek Harness): **context
 compaction without an LLM call**, works out of the box.
 
-**Requires dsh >= 0.1.5-rc.2** — this plugin targets the dsh RC/stable line only (CI and releases resolve the newest of the `latest`/`next` dist-tags at runtime). **The alpha line is no longer supported.**
+**Requires dsh >= 0.1.7-rc.1** — this plugin targets the dsh RC/stable line only (CI and releases resolve the newest of the `latest`/`next` dist-tags at runtime). **The alpha line is no longer supported.**
 
 > [简体中文](README.md) · **English**
 
@@ -177,6 +177,7 @@ All optional, defaults work out of the box:
 | Key | Default | Meaning |
 |---|---|---|
 | `thresholdRatio` | 0.8 | pressure trigger (inherited upstream compaction-basic default 0.8; this plugin's bundle patch mounts 0.7, recommended for CJK-heavy sessions) |
+| `headroomTokens` | 65536 | inherited from upstream compaction-basic (new in 0.1.7): extra pressure-budget margin (non-negative integer). The pressure ceiling is context window − routed output reservation (`maxTokens`) − this margin; lower it for small-window models |
 | `roundInterval` | 50 | compact every N assistant messages (one LLM roundtrip) (0 disables). Default 50: 50, 100, 150… — the clock restarts after every compaction |
 | `onModelSwitch` | `notice` | after a model switch: `notice` suggests `/dcp compact` (default); `auto` compacts at the next idle boundary; `off` disables |
 | `modelSwitchMinTokens` | 32768 | minimum priced context size (measured by the host token meter) for a model switch to be announced; `0` disables this gate. 32k default ≈ the post-compaction baseline (~16% of the window) plus some real growth |
@@ -207,7 +208,7 @@ cordis.patch.yml mount block.
 ## Development
 
 ```bash
-npm install && npm test     # 65 tests: extractor/compaction/command/config/triggers/setup
+npm install && npm test     # 109 tests: extractor/compaction/command/config/triggers/recover-seam/setup
 ```
 
 ## License

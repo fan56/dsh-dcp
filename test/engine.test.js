@@ -34,6 +34,8 @@ function mockCtx() {
 
 const filler = (label) => `${label} ${'lorem ipsum dolor sit amet consectetur adipiscing elit '.repeat(6)}`.slice(0, 400)
 
+// dsh 0.1.7 message model: tool results are first-class role-'tool' messages
+// (required toolCallId, message-level isError), not user-role blocks.
 const region = [
   { id: 'u1', role: 'user', content: [{ type: 'text', text: '帮我把登录页的重定向 bug 修掉' }], source: { kind: 'user' } },
   {
@@ -45,8 +47,8 @@ const region = [
     source: { kind: 'model', provider: 'p', model: 'm' },
   },
   {
-    id: 'r1', role: 'user',
-    content: [{ type: 'tool-result', toolCallId: 'c1', content: [{ type: 'text', text: filler('login.ts:') }] }],
+    id: 'r1', role: 'tool', toolCallId: 'c1',
+    content: [{ type: 'text', text: filler('login.ts:') }],
     source: { kind: 'tool', callId: 'c1' },
   },
   {
@@ -58,8 +60,8 @@ const region = [
     source: { kind: 'model', provider: 'p', model: 'm' },
   },
   {
-    id: 'r2', role: 'user',
-    content: [{ type: 'tool-result', toolCallId: 'c2', content: [{ type: 'text', text: filler('commits:') }] }],
+    id: 'r2', role: 'tool', toolCallId: 'c2',
+    content: [{ type: 'text', text: filler('commits:') }],
     source: { kind: 'tool', callId: 'c2' },
   },
   {

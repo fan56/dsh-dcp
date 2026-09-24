@@ -12,12 +12,14 @@ import {
   SECTIONS,
 } from '../lib/summarizer.js'
 
-/** Minimal message builders matching dsh-llm runtime shapes. */
+/** Minimal message builders matching dsh-llm runtime shapes (dsh 0.1.7 model:
+ * tool results are role-'tool' messages; checkpoints carry kind
+ * 'compact-checkpoint'). */
 /** @type {(text: string) => any} */
 const user = (text) => ({ id: 'u', role: 'user', content: [{ type: 'text', text }], source: { kind: 'user' } })
 /** @type {(text: string) => any} */
 const checkpoint = (text) => ({
-  id: 'c', role: 'user', content: [{ type: 'text', text }], source: { kind: 'plugin', plugin: 'compact' },
+  id: 'c', role: 'user', content: [{ type: 'text', text }], source: { kind: 'compact-checkpoint', compactionId: 'sim-1' },
 })
 /** @type {(blocks: any) => any} */
 const assistant = (blocks) => ({
@@ -27,7 +29,8 @@ const assistant = (blocks) => ({
 const toolCall = (id, name, args) => ({ type: 'tool-call', id, name, arguments: JSON.stringify(args) })
 /** @type {(callId: string, lines: string[], isError?: boolean) => any} */
 const toolResult = (callId, lines, isError = false) => ({
-  id: 'r', role: 'user', content: [{ type: 'tool-result', toolCallId: callId, isError, content: lines.map((text) => ({ type: 'text', text })) }], source: { kind: 'tool', callId },
+  id: 'r', role: 'tool', toolCallId: callId, isError,
+  content: lines.map((text) => ({ type: 'text', text })), source: { kind: 'tool', callId },
 })
 
 /** chars/4 estimator, same shape as the host meter's documented heuristic. */
@@ -223,20 +226,23 @@ test('estimateTextTokens prices CJK at ~2 chars/token and ASCII at 4', () => {
   assert.equal(estimateTextTokens('abc', 'ascii'), 1)
 })
 
-test('estimateMessageTokens covers text, tool-call args, and tool results', () => {
-  const message = {
-    id: 'm', role: 'user',
+test('estimateMessageTokens prices tool results through role-tool messages', () => {
+  const call = {
+    id: 'm', role: 'assistant',
     content: [
       { type: 'text', text: '你好' },
       { type: 'tool-call', id: 'c', name: 'bash', arguments: '{"command":"测试"}' },
-      { type: 'tool-result', toolCallId: 'c', content: [{ type: 'text', text: '结果' }] },
     ],
-    source: { kind: 'user' },
+    source: { kind: 'model', provider: 'p', model: 'm' },
   }
-  // CJK: 你好+测试+结果 = 6 CJK chars (3 tokens) + JSON/ASCII wrapper (~15 chars → 4 tokens)
-  assert.equal(estimateMessageTokens(message, 'cjk'), 7)
-  // host-style flat pricing: 21 chars total → ceil(21/4) = 6
-  assert.equal(estimateMessageTokens(message, 'ascii'), 6)
+  const result = {
+    id: 'r', role: 'tool', toolCallId: 'c', isError: false,
+    content: [{ type: 'text', text: '结果' }], source: { kind: 'tool', callId: 'c' },
+  }
+  // CJK: 你好+测试+结果 = 6 CJK chars (3 tokens) + JSON/ASCII wrapper (~14 chars → 4 tokens)
+  assert.equal(estimateMessageTokens(call, 'cjk') + estimateMessageTokens(result, 'cjk'), 7)
+  // host-style flat pricing: 18 + 2 chars total → ceil(18/4) + 1 = 6
+  assert.equal(estimateMessageTokens(call, 'ascii') + estimateMessageTokens(result, 'ascii'), 6)
 })
 
 test('zh language enables Chinese error and todo rules; en ignores them', () => {
@@ -244,7 +250,7 @@ test('zh language enables Chinese error and todo rules; en ignores them', () => 
     { id: '0', role: 'user', content: [{ type: 'text', text: '部署失败了，帮我看看' }], source: { kind: 'user' } },
     { id: '1', role: 'assistant', content: [{ type: 'text', text: '检查日志\n待办：写个复现脚本' }], source: { kind: 'model', provider: 'p', model: 'm' } },
     { id: '2', role: 'assistant', content: [{ type: 'tool-call', id: 'c1', name: 'bash', arguments: '{"command":"cat log"}' }], source: { kind: 'model', provider: 'p', model: 'm' } },
-    { id: '3', role: 'user', content: [{ type: 'tool-result', toolCallId: 'c1', isError: false, content: [{ type: 'text', text: '找不到模块：build/out.js' }] }], source: { kind: 'tool', callId: 'c1' } },
+    { id: '3', role: 'tool', toolCallId: 'c1', isError: false, content: [{ type: 'text', text: '找不到模块：build/out.js' }], source: { kind: 'tool', callId: 'c1' } },
   ])
   const zhFacts = extractFacts(msgs, 'zh')
   assert.ok(zhFacts.errors.some((line) => line.includes('找不到模块')))
@@ -257,7 +263,7 @@ test('zh language enables Chinese error and todo rules; en ignores them', () => 
 test('injected host context is skipped from intents', () => {
   const msgs = [
     user('hi'),
-    { id: 's', role: 'user', content: [{ type: 'text', text: 'Current runtime context. This snapshot supersedes earlier snapshots.' }], source: { kind: 'plugin', plugin: '@deepseek-ai/dsh-system-prompt', form: 'snapshot', sections: [] } },
+    { id: 's', role: 'user', content: [{ type: 'text', text: 'Current runtime context. This snapshot supersedes earlier snapshots.' }], source: { kind: 'runtime-context', form: 'snapshot', sections: [] } },
     { id: 'c', role: 'user', content: [{ type: 'text', text: '<system-reminder> skill catalog body' }], source: { kind: 'skill-catalog', form: 'catalog', entries: [] } },
     { id: 'i', role: 'user', content: [{ type: 'text', text: '<system-reminder> AGENTS.md instructions body' }], source: { kind: 'agent-instructions', form: 'instructions', changes: [] } },
     user('请修复主题'),
@@ -286,8 +292,10 @@ test('tokenEstimate cjk keeps CJK summaries inside their real-token budget; asci
   }))
   const filler = {
     id: 'f',
-    role: 'user',
-    content: [{ type: 'tool-result', toolCallId: 'c', content: [{ type: 'text', text: 'lorem ipsum dolor sit amet consectetur adipiscing elit '.repeat(50) }] }],
+    role: 'tool',
+    toolCallId: 'c',
+    isError: false,
+    content: [{ type: 'text', text: 'lorem ipsum dolor sit amet consectetur adipiscing elit '.repeat(50) }],
     source: { kind: 'tool', callId: 'c' },
   }
   const region = /** @type {any} */ ([...intents, filler])
@@ -315,7 +323,13 @@ test('extractFacts ignores dsh-dcp notice rows; noticeText stays bounded-shape',
     {
       id: 'n1', role: 'user',
       content: [{ type: 'text', text: 'dcp: 已压缩 87 条历史（约 23456 tokens，auto）' }],
-      source: { kind: 'plugin', plugin: 'dsh-dcp', form: 'notice', summary: 'dcp: 已压缩 87 条历史（约 23456 tokens，auto）' },
+      source: { kind: 'dsh-dcp', form: 'notice', summary: 'dcp: 已压缩 87 条历史（约 23456 tokens，auto）' },
+    },
+    {
+      id: 'n2', role: 'user',
+      content: [{ type: 'text', text: 'dcp: 已压缩 5 条历史（约 99 tokens，manual）' }],
+      // session-format V3→V4 migrates pre-0.1.7 notice rows to this kind
+      source: { kind: 'plugin:dsh-dcp', form: 'notice', summary: 'dcp: 已压缩 5 条历史（约 99 tokens，manual）' },
     },
   ])
   const facts = extractFacts(messages, 'zh')

@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "dsh-dcp",
+    "description": "确定性、零 LLM 摘要的上下文修剪压缩后端，附 /dcp 命令，开箱即用。"
+  }
+}

@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "dsh-dcp",
+    "description": "Deterministic zero-LLM context-pruning compaction backend with a /dcp command — works out of the box."
+  }
+}

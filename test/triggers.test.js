@@ -186,8 +186,7 @@ test('recordCompaction appends a bounded notice row and bumps /dcp stats', () =>
   assert.equal(session.appended.length, 1)
   const { type, data } = session.appended[0]
   assert.equal(type, 'user/message')
-  assert.equal(data.source.kind, 'plugin')
-  assert.equal(data.source.plugin, 'dsh-dcp')
+  assert.equal(data.source.kind, 'dsh-dcp')
   assert.equal(data.source.form, 'notice')
   assert.ok(data.source.summary.includes('3'))
   assert.ok(data.source.summary.includes('23456'))

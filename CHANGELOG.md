@@ -3,6 +3,19 @@
 All notable changes to dsh-dcp are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [Unreleased]
+
+### Changed
+
+- **dsh 0.1.7-rc.1 adaptation** — dependency floor raised to `@deepseek-ai/dsh-* >= 0.1.7-rc.1` (devDeps/overrides pinned exact; README requirement lines updated). The engine inherits `BasicCompactionEngine`'s new required `RegionDependencies.recover()` (synchronous `compaction/summary-error` waterfall, default `false` → summarize failure rethrows) and the new three-argument `resolveCompactSpec(policy, contextWindow, reservedCompletionTokens)` unchanged; the reservation reads the routed envelope's `maxTokens`, falling back to the adapter `defaultMaxTokens`, then zero.
+- **Message model (0.1.7) touch points** — compaction/model-switch notice rows now carry the producer-owned source `kind: 'dsh-dcp'` (`form: 'notice'`, declared via module augmentation in `lib/sources.d.ts`); the retired `kind: 'plugin'` wrapper is refused by session-log V4 admission. The deterministic summarizer reads tool results from first-class role-`'tool'` messages (required `toolCallId`, message-level `isError`) instead of user-role `'tool-result'` blocks, recognizes prior checkpoints through the official `isCompactCheckpointSource` guard (`kind: 'compact-checkpoint'`), skips both new and V3→V4-migrated (`plugin:dsh-dcp`) notice rows, and drops any producer's `snapshot`-form injected context generically.
+- **`headroomTokens` policy key forwarded** — compaction-basic 0.1.7's new pressure key (non-negative integer, default 65536; caps the trigger at context window minus the routed output reservation minus headroom) is accepted by the plugin config, `modelPolicies` entries, and `DcpEngine.Config`, and forwarded verbatim to the parent engine.
+- **Plugin Manager metadata.** Added `icon.svg` and `locale/{en,zh}.json` (`meta.title`/`meta.description` per the official `readPluginMeta` contract); `package.json` now declares the `icon` and ships both in the tarball.
+
+### Fixed
+
+- `scripts/compare.mjs` simulation prices role-`'tool'` result messages and emits `compact-checkpoint`-kind synthetic checkpoints, matching the 0.1.7 session shapes.
+
 ## [0.11.0] - 2026-09-11
 
 ### Changed

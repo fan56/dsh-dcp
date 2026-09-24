@@ -79,9 +79,6 @@ function hostTokens(content) {
   return content.reduce((total, block) => {
     if (block.type === 'text') return total + Math.ceil(block.text.length / 4)
     if (block.type === 'tool-call') return total + Math.ceil(block.arguments.length / 4)
-    if (block.type === 'tool-result') {
-      return total + block.content.reduce((sum, inner) => sum + (inner.type === 'text' ? Math.ceil(inner.text.length / 4) : 0), 0)
-    }
     return total
   }, 0)
 }
@@ -145,7 +142,7 @@ function checkpointMessage(summaryText, compactionId) {
       { type: 'text', text: summaryText },
       { type: 'text', text: '</compacted-summary>' },
     ],
-    source: { kind: 'plugin', plugin: 'compact', compactionId },
+    source: { kind: 'compact-checkpoint', compactionId },
   }
 }
 
