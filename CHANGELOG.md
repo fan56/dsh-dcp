@@ -5,6 +5,11 @@ All notable changes to dsh-dcp are documented here. The format follows
 
 ## [Unreleased]
 
+### Fixed
+- **Write-side tool protection actually engages by default (#1)** — `protectedTools` was declared on the plugin schema without a `.default()`, while the resolver carried the real default `['write', 'edit', 'apply_patch']`. The host materializes a declared-but-default-less schema field as `[]`, which sailed through the resolver's `!== undefined` check and silently overrode the module default — so repeated `write`/`edit`/`apply_patch` calls were folded into the dedup note instead of being protected. The schema and the resolver now share one exported `PROTECTED_TOOLS` constant; the schema default makes the materialized value the documented default, and an explicit `protectedTools: []` still resolves to "protect nothing". Regression-tested: constant identity, explicit-empty semantics, and schema materialization (`test/config.test.js`).
+- **Compaction and model-switch notices land in the session again (#2)** — both notice paths called `session.append('user/message', msg)` without the third-argument surface metadata that dsh 0.2.0-rc.2 requires for surface-eligible event types, so the host rejected every append with "requires a surfaceOp marker" and `notice: true` silently degraded to off (the compaction itself was never affected — the calls are wrapped in try/catch and the checkpoint rides the engine's own path). Both call sites now pass `{ surfaceOp: 'append' }`, matching the official `dsh-compaction-basic` checkpoint shape (which uses `replace` for replacement; a notice is an addition). The model-switch, trigger, and compaction-notice session stubs now assert the marker.
+
+
 ### Changed
 
 - **raise dsh host floor to 0.2.0-rc.2** — devDeps exact pins and both override blocks (`overrides` / `pnpm.overrides`) moved `0.1.7-rc.1` → `0.2.0-rc.2`; peer floors raised to `>=0.2.0-rc.2`; README requirement lines follow. No code changes: the `BasicCompactionEngine` / `isCompactCheckpointSource` / `recover()` surface is unchanged in 0.2.0 (109 tests + `tsc --noEmit` green against the 0.2.0-rc.2 closure).

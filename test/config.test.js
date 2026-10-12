@@ -1,6 +1,7 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { splitConfig, resolveDcpConfig, RUNTIME_SETTABLE } from '../lib/config.js'
+import { DcpEngine } from '../lib/index.js'
+import { splitConfig, resolveDcpConfig, PROTECTED_TOOLS, RUNTIME_SETTABLE } from '../lib/config.js'
 
 test('splitConfig forwards basic keys and dcp keys', () => {
   const { basic, dcp } = splitConfig({
@@ -60,4 +61,26 @@ test('runtime settable keys are a closed documented set', () => {
   assert.deepEqual(Object.keys(RUNTIME_SETTABLE).sort(), [
     'dedup', 'language', 'maxItemChars', 'maxItems', 'maxSummaryTokens', 'modelSwitchMinTokens', 'notice', 'onModelSwitch', 'purgeErrors', 'roundInterval', 'thresholdRatio', 'tokenEstimate',
   ])
+})
+
+test('protectedTools keeps the explicit-empty semantics and shares one default constant (#1)', () => {
+  // The resolver default is THE constant — schema and parser must agree by
+  // construction, not by two hand-copied literals.
+  const resolved = resolveDcpConfig({})
+  assert.equal(resolved.protectedTools, PROTECTED_TOOLS, 'resolver default is the shared PROTECTED_TOOLS constant')
+
+  // An explicit empty array means "protect nothing" — the resolver must not
+  // resurrect the default over an explicit value.
+  assert.deepEqual(resolveDcpConfig({ protectedTools: [] }).protectedTools, [])
+  assert.deepEqual(resolveDcpConfig({ protectedTools: ['write'] }).protectedTools, ['write'])
+})
+
+test('the plugin schema carries the protectedTools default (#1)', () => {
+  // The host materializes declared-but-default-less schema fields as []:
+  // with the schema default in place, an unset config materializes to the
+  // documented default instead, and an explicit [] still stays [].
+  const materialized = /** @type {any} */ (DcpEngine.Config({}))
+  assert.deepEqual(materialized.protectedTools, ['write', 'edit', 'apply_patch'])
+  const explicitEmpty = /** @type {any} */ (DcpEngine.Config({ protectedTools: [] }))
+  assert.deepEqual(explicitEmpty.protectedTools, [])
 })

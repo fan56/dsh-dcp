@@ -65,8 +65,8 @@ function derivedReceivers(engine) {
 function fakeSession(id) {
   return {
     header: { id },
-    appended: /** @type {{type: string, data: any}[]} */ ([]),
-    append(type, data) { this.appended.push({ type, data }) },
+    appended: /** @type {{type: string, data: any, opts: any}[]} */ ([]),
+    append(type, data, opts) { this.appended.push({ type, data, opts }) },
   }
 }
 
@@ -116,6 +116,7 @@ test('recordCompaction on derived receivers shares state with the original engin
   assert.equal(engine.dcpStats.shadowedTokens, 84)
   assert.equal(session.appended.length, 2)
   assert.equal(session.appended[0].type, 'user/message')
+  assert.equal(session.appended[0].opts && session.appended[0].opts.surfaceOp, 'append', 'surface-eligible append carries the surfaceOp marker (#2)')
 })
 
 test('compactRegion on derived receivers records stats on the original engine', async () => {

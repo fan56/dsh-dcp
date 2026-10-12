@@ -62,8 +62,8 @@ class RoundSpyEngine extends DcpEngine {
 function fakeSession(id) {
   return {
     header: { id },
-    appended: /** @type {{type: string, data: any}[]} */ ([]),
-    append(type, data) { this.appended.push({ type, data }) },
+    appended: /** @type {{type: string, data: any, opts: any}[]} */ ([]),
+    append(type, data, opts) { this.appended.push({ type, data, opts }) },
   }
 }
 
@@ -185,6 +185,7 @@ test('recordCompaction appends a bounded notice row and bumps /dcp stats', () =>
   assert.equal(engine.dcpStats.shadowedTokens, 23456)
   assert.equal(session.appended.length, 1)
   const { type, data } = session.appended[0]
+  assert.equal(session.appended[0].opts && session.appended[0].opts.surfaceOp, 'append', 'surface-eligible append carries the surfaceOp marker (#2)')
   assert.equal(type, 'user/message')
   assert.equal(data.source.kind, 'dsh-dcp')
   assert.equal(data.source.form, 'notice')
