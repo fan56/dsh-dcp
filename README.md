@@ -175,4 +175,4 @@ npm install && npm test     # 109 个用例：抽取/压缩/命令/配置/触发
 
 ## License
 
-MIT
+Apache-2.0

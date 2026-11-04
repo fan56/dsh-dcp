@@ -213,4 +213,4 @@ npm install && npm test     # 109 tests: extractor/compaction/command/config/tri
 
 ## License
 
-MIT
+Apache-2.0
