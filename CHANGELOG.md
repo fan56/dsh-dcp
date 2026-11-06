@@ -3,7 +3,7 @@
 All notable changes to dsh-dcp are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
-## [Unreleased]
+## [0.14.0] - 2026-11-06
 
 ### Fixed
 - **Write-side tool protection actually engages by default (#1)** — `protectedTools` was declared on the plugin schema without a `.default()`, while the resolver carried the real default `['write', 'edit', 'apply_patch']`. The host materializes a declared-but-default-less schema field as `[]`, which sailed through the resolver's `!== undefined` check and silently overrode the module default — so repeated `write`/`edit`/`apply_patch` calls were folded into the dedup note instead of being protected. The schema and the resolver now share one exported `PROTECTED_TOOLS` constant; the schema default makes the materialized value the documented default, and an explicit `protectedTools: []` still resolves to "protect nothing". Regression-tested: constant identity, explicit-empty semantics, and schema materialization (`test/config.test.js`).
