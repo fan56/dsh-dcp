@@ -5,6 +5,9 @@ All notable changes to dsh-dcp are documented here. The format follows
 
 ## [Unreleased]
 
+### Added
+- npm packaged upgrade regression test (pnpm 11 strictDepBuilds, see dsh-subagent-registry#10).
+
 ### Changed
 - **0.2.2-rc.2 wave**: every exact `0.2.2-rc.1` dev pin and override rides the host closure to `0.2.2-rc.2` (devDependencies, npm `overrides`, and `pnpm.overrides` — 34 pins). `@deepseek-ai/dsh-invariants` stays at `0.2.0-rc.2`: the rc.2 wave does not republish it (no `0.2.2-rc.2` on the registry), so the old pin remains. Peer floors (`>=0.2.0-rc.2`, cordis `^4.0.2`, schemastery `^3.18.2`) are unchanged — the pre-flight `includePrerelease` semantics already match the new rc. ci.yml / release.yml need no edits: ci.yml already resolves the host closure as newest-of(latest,next) with a prerelease-aware node compare (it adopts `dsh@0.2.2-rc.2` from `next` on its next run) and release.yml carries no host-closure step. `package-lock.json` and `pnpm-lock.yaml` regenerated against registry.npmjs.org (CI installs `pnpm install --frozen-lockfile`, so both locks must move in the same commit — the dsh-tui-pi v1.0.5 lesson). Typecheck clean, 111/0 tests, boot smoke pass (mount → remove lifecycle restores the stock tree).
 

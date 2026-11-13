@@ -28,7 +28,7 @@
     "locale/*.json"
   ],
   "scripts": {
-    "test": "node --test",
+    "test": "node --test && node test/packaged-upgrade.test.mjs",
     "setup": "node scripts/setup.mjs",
     "link:closure": "node scripts/link-dsh-closure.mjs",
     "check": "tsc --noEmit -p tsconfig.json",
