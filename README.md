@@ -170,7 +170,7 @@ npx dsh-dcp-setup --remove /path/to/cordis.patch.yml
 ## 开发
 
 ```bash
-npm install && npm test     # 109 个用例：抽取/压缩/命令/配置/触发/恢复缝/安装脚本
+pnpm install && pnpm test    # 109 个用例：抽取/压缩/命令/配置/触发/恢复缝/安装脚本
 ```
 
 ## License

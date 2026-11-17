@@ -208,7 +208,7 @@ cordis.patch.yml mount block.
 ## Development
 
 ```bash
-npm install && npm test     # 109 tests: extractor/compaction/command/config/triggers/recover-seam/setup
+pnpm install && pnpm test    # 109 tests: extractor/compaction/command/config/triggers/recover-seam/setup
 ```
 
 ## License
