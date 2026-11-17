@@ -31,7 +31,7 @@
 // removed on success.
 
 import { spawnSync } from 'node:child_process'
-import { mkdtempSync, mkdirSync, rmSync, writeFileSync } from 'node:fs'
+import { mkdtempSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { readFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import path from 'node:path'
@@ -42,6 +42,8 @@ const pkg = JSON.parse(await readFile(path.join(repoRoot, 'package.json'), 'utf8
 const ownName = pkg.name // @aiwayds/dsh-dcp
 const entryId = 'dsh-dcp'
 
+let observerDir = null
+
 const work = mkdtempSync(path.join(tmpdir(), 'dsh-dcp-smoke-'))
 const home = path.join(work, 'dsh-home')
 const profile = path.join(home, 'profiles', 'smoke')
@@ -51,6 +53,7 @@ function fail(message, output = '') {
   console.error(`smoke-boot: FAIL — ${message}`)
   if (output) console.error(output.split('\n').slice(0, 30).join('\n'))
   console.error(`smoke-boot: scratch kept at ${work}`)
+  if (observerDir) console.error(`smoke-boot: observer kept at ${observerDir}`)
   process.exit(1)
 }
 
@@ -112,10 +115,209 @@ if (!dumpAfter.stdout.includes('compaction-basic')) {
 }
 console.log('smoke-boot: setup.mjs mount → remove lifecycle restored the stock tree')
 
+// A clean boot is NOT proof of activation: cordis leaves a plugin silently
+// PENDING when an inject service is missing (fiber state 0, error=null, no
+// /dcp command, no log line). Mount a read-only observer through the same patch
+// layer and enumerate the live fibers and commands service from inside the
+// host, then assert hard evidence of activation after the boot. The observer
+// source is written to a scratch dir at runtime — never shipped in lib/.
+const OBSERVER_SOURCE = `// Read-only activation observer mounted by scripts/smoke-boot.mjs.
+// Never modifies services or the plugin tree. Cordis state enum (4.1.0):
+// 0 PENDING, 1 LOADING, 2 ACTIVE, 3 FAILED, 4 DISPOSED, 5 UNLOADING.
+import { writeFileSync } from 'node:fs'
+
+const P = 'DCP_SMOKE_OBS'
+const FILE = process.env.DCP_SMOKE_OBS_FILE
+const log = (...p) => process.stderr.write('[' + P + '] ' + p.join(' ') + '\\n')
+const SAMPLES = [0, 2000, 6000, 8000]
+const VALID = new Set([0, 1, 2, 3, 4, 5])
+
+function row(f) {
+  return {
+    uid: f.uid == null ? null : f.uid,
+    name: f.runtime && f.runtime.name != null ? f.runtime.name : null,
+    cb: f.runtime && f.runtime.callback && f.runtime.callback.name ? f.runtime.callback.name : null,
+    state: f.state,
+    inject: f.inject ? Object.keys(f.inject) : [],
+    error: f._error ? String(f._error.message || f._error).slice(0, 300) : null,
+  }
+}
+
+function isDcp(r) {
+  return r.cb === 'DcpEngine' || r.name === 'DcpEngine'
+}
+
+export default function apply(ctx, config = {}) {
+  function take() {
+    const s = {
+      ok: false, at: Date.now(), error: null, enumError: null,
+      commandError: null, fiberCount: 0, dcp: [], dcpCommands: [],
+      hasDcp: false, commandCount: 0,
+    }
+    try {
+      const root = ctx.root
+      if (!root || !root.registry || typeof root.registry.values !== 'function') {
+        throw new Error('ctx.root.registry.values() unavailable')
+      }
+      const rows = []
+      for (const runtime of root.registry.values()) {
+        if (!runtime || !runtime.fibers) continue
+        for (const fiber of runtime.fibers) rows.push(row(fiber))
+      }
+      s.fiberCount = rows.length
+      s.dcp = rows.filter(isDcp)
+      for (const d of s.dcp) {
+        if (!VALID.has(d.state)) s.enumError = 'DcpEngine state ' + d.state + ' outside 0..5'
+      }
+      try {
+        const commands = root.reflect.get('commands', true)
+        if (!commands || typeof commands.list !== 'function') {
+          throw new Error('commands service or commands.list unavailable')
+        }
+        const names = (commands.list(undefined) || []).map((d) => d && d.name)
+        s.commandCount = names.length
+        s.dcpCommands = names.filter((n) => n === 'dcp')
+        s.hasDcp = names.includes('dcp')
+      } catch (e) {
+        s.commandError = String(e && e.message ? e.message : e)
+      }
+      s.ok = true
+    } catch (e) {
+      s.error = 'scan threw: ' + String(e && e.message ? e.message : e)
+    }
+    return s
+  }
+
+  function write(samples, done) {
+    if (!FILE) { log('NO_OBS_FILE'); return }
+    try {
+      writeFileSync(FILE, JSON.stringify({ samples, done }))
+    } catch (e) {
+      log('WRITE_ERROR ' + String(e && e.message ? e.message : e))
+    }
+  }
+
+  const samples = []
+  SAMPLES.forEach((delay, i) => {
+    setTimeout(() => {
+      const s = take()
+      samples.push(s)
+      log('sample ' + i + ' @' + delay + 'ms fiberCount=' + s.fiberCount +
+        ' dcp=' + JSON.stringify(s.dcp) +
+        ' dcpCommands=' + JSON.stringify(s.dcpCommands) +
+        ' hasDcp=' + s.hasDcp +
+        ' ok=' + s.ok + ' error=' + s.error + ' enumError=' + s.enumError +
+        ' commandError=' + s.commandError)
+      write(samples, i === SAMPLES.length - 1)
+    }, delay)
+  })
+}
+`
+
+function observerTail(bootOutput) {
+  const lines = (bootOutput || '').split('\n')
+  const obs = lines.filter((line) => line.includes('[DCP_SMOKE_OBS]'))
+  return `[DCP_SMOKE_OBS] lines:\n${obs.join('\n')}\n--- boot log tail ---\n${lines.slice(-20).join('\n')}`
+}
+
+function readObservation(file, bootOutput) {
+  let raw = ''
+  try {
+    raw = readFileSync(file, 'utf8')
+  } catch (e) {
+    fail('observation mechanism failed — observer wrote no result file: ' + String(e), observerTail(bootOutput))
+  }
+  let data
+  try {
+    data = JSON.parse(raw)
+  } catch (e) {
+    fail('observation mechanism failed — observer result is not JSON: ' + String(e), raw.slice(0, 500))
+  }
+  if (!data || !Array.isArray(data.samples) || data.samples.length === 0) {
+    fail('observation mechanism failed — observer produced no samples', JSON.stringify(data).slice(0, 500))
+  }
+  if (data.done !== true) {
+    fail('observation mechanism failed — observer did not finish all samples before the boot ended', observerTail(bootOutput))
+  }
+  return data
+}
+
+// Independent signal from the host itself: for optional entries that stayed
+// PENDING/FAILED, dsh writes to stderr a block shaped like:
+//   dsh: warning: N entries did not activate
+//   <entry-id> (<entry-name>): pending (waiting for services: ...)
+// The dsh-dcp entry (entryId) must never appear in that list. Scan the boot log
+// (not the observer file) so this is a genuinely independent signal.
+function didNotActivateHits(bootOutput) {
+  const header = /^dsh: warning: \d+ entr(?:y|ies) did not activate/
+  // Diagnostic lines are `<id> (<name>): ...`. Match the id exactly so the
+  // observer plugin `dcp-smoke-observer` is never mistaken for `dsh-dcp`.
+  const diagnostic = /^(\S+) \(/
+  const hits = []
+  let inBlock = false
+  for (const line of (bootOutput || '').split('\n')) {
+    if (header.test(line)) { inBlock = true; continue }
+    if (!inBlock) continue
+    if (!line.trim() || /^dsh: /.test(line)) { inBlock = false; continue }
+    const m = diagnostic.exec(line)
+    if (m && m[1] === entryId) hits.push(line.trim())
+  }
+  return hits
+}
+
+function assertActivation(data, bootOutput) {
+  const samples = data.samples
+  const last = samples.at(-1)
+  if (!samples.some((s) => s.ok === true && s.error == null)) {
+    fail('observation mechanism failed (cannot prove activation) — no usable sample', observerTail(bootOutput))
+  }
+  for (const s of samples) {
+    if (s.enumError) {
+      fail('observation mechanism failed (cannot prove activation) — ' + s.enumError, observerTail(bootOutput))
+    }
+  }
+  if (last.ok !== true || last.error || last.commandError) {
+    fail('observation mechanism failed (cannot prove activation) — final sample unusable: ' + JSON.stringify(last), observerTail(bootOutput))
+  }
+  if (!Array.isArray(last.dcp) || last.dcp.length === 0) {
+    fail('observation mechanism failed (cannot prove activation) — DcpEngine fiber not found in registry', observerTail(bootOutput))
+  }
+  const offenders = []
+  for (const r of last.dcp) {
+    // Canary: `error` is read from the TS-private `_error` in the observer. If
+    // upstream renames that private field, every read becomes null and the
+    // `error===null` check below turns vacuously true. A FAILED fiber (3) is
+    // guaranteed by cordis to carry an error; seeing 3 with error=null means
+    // the observation mechanism itself drifted, not a real dsh-dcp state.
+    if (r.state === 3 && r.error === null) {
+      fail('observation mechanism failed (error field unreadable) — DcpEngine fiber reports state=3 (FAILED) with error=null; the _error field may have been renamed upstream: uid=' + JSON.stringify(r.uid) + ' name=' + JSON.stringify(r.name) + ' inject=' + JSON.stringify(r.inject), observerTail(bootOutput))
+    }
+    const where = `uid=${JSON.stringify(r.uid)} name=${JSON.stringify(r.name)} state=${r.state} inject=${JSON.stringify(r.inject)}`
+    if (r.state !== 2) offenders.push(`DcpEngine fiber ${where} (expected state=2/ACTIVE)`)
+    if (r.error !== null) offenders.push(`DcpEngine fiber ${where} error=${r.error}`)
+  }
+  if (last.hasDcp !== true) offenders.push(`no /dcp command registered (commandCount=${last.commandCount}, dcpCommands=${JSON.stringify(last.dcpCommands)})`)
+  const inactive = didNotActivateHits(bootOutput)
+  if (inactive.length > 0) offenders.push(`host "did not activate" warning lists dsh-dcp: ${inactive.join(' | ')}`)
+  if (offenders.length > 0) {
+    fail('dsh-dcp did not activate: ' + offenders.join('; ') + ' | final sample: ' + JSON.stringify(last), observerTail(bootOutput))
+  }
+  console.log(`smoke-boot: activation OK — all ${last.dcp.length} DcpEngine fiber(s) state=2 (ACTIVE), error=null, /dcp command registered (commandCount=${last.commandCount}); ${samples.length} samples`)
+}
+
 // Phase B — mount proof: the composed tree must carry the dsh-dcp entry, with
 // compaction-basic disabled rather than removed-by-default. The hand-written
 // mount points INTO the installed tarball (the true user shape), so the boot
 // below exercises the packed artifact.
+// The observer lives in its own scratch dir (outside the pack/install tree)
+// so its path never leaks into the mount assertions above.
+observerDir = mkdtempSync(path.join(tmpdir(), 'dcp-smoke-observer-'))
+writeFileSync(path.join(observerDir, 'package.json'), JSON.stringify({
+  name: 'dcp-smoke-observer', version: '1.0.0', private: true, type: 'module', main: 'index.js',
+}, null, 2) + '\n')
+writeFileSync(path.join(observerDir, 'index.js'), OBSERVER_SOURCE)
+const obsFile = path.join(work, 'activation-observation.json')
+
 writeFileSync(path.join(profile, 'cordis.patch.yml'), `# scratch smoke profile: dsh-dcp mounted the setup.mjs way
 - id: compaction-basic
   name: '@deepseek-ai/dsh-compaction-basic'
@@ -126,6 +328,8 @@ writeFileSync(path.join(profile, 'cordis.patch.yml'), `# scratch smoke profile: 
       config:
         thresholdRatio: 0.7
         language: zh
+    - id: dcp-smoke-observer
+      name: ${path.join(observerDir, 'index.js')}
 `)
 const dump = dsh(['--profile', 'smoke', '--dump-config'])
 if (dump.status !== 0 || dump.error) fail('dsh --dump-config failed on the scratch profile', `${dump.stdout}\n${dump.stderr}`)
@@ -134,8 +338,17 @@ if (!dump.stdout.includes(entryId)) {
 }
 
 // Phase 2 — boot proof: the plugin tree must LOAD without a loader error.
+// The observer's last sample now fires at 8s after it starts (SAMPLES above),
+// and SIGKILL lands at bootSeconds (25s). That leaves ~17s of headroom so a
+// cold start delaying the observer's apply() cannot make the kill fall before
+// the last sample; wall-clock cost is unchanged. Last two samples (6s / 8s)
+// stay 2s apart.
 const bootSeconds = 25
-const boot = dsh(['--profile', 'smoke'], { timeout: bootSeconds * 1000, killSignal: 'SIGKILL' })
+const boot = dsh(['--profile', 'smoke'], {
+  timeout: bootSeconds * 1000,
+  killSignal: 'SIGKILL',
+  env: { ...process.env, DSH_HOME: home, DCP_SMOKE_OBS_FILE: obsFile },
+})
 const output = `${boot.stdout ?? ''}\n${boot.stderr ?? ''}`
 const loaderErrors = [
   /plugin tree failed to load/,
@@ -153,5 +366,9 @@ if (boot.signal !== 'SIGKILL' && boot.status !== 0) {
   fail(`dsh exited early with code ${boot.status} and no loader error — unexpected`, output)
 }
 
-console.log(`smoke-boot: PASS — ${ownName} mounted via cordis.patch.yml (compaction-basic disabled), composed into the scratch profile tree, booted clean in real dsh (${boot.signal === 'SIGKILL' ? `survived ${bootSeconds}s boot window` : `exited ${boot.status}`}); setup mount → remove lifecycle restored the stock tree`)
+// A silent, surviving boot is not enough: assert the plugin actually activated.
+assertActivation(readObservation(obsFile, output), output)
+
+console.log(`smoke-boot: PASS — ${ownName} mounted via cordis.patch.yml (compaction-basic disabled), composed into the scratch profile tree, booted clean in real dsh (${boot.signal === 'SIGKILL' ? `survived ${bootSeconds}s boot window` : `exited ${boot.status}`}), activated (DcpEngine state=2, /dcp registered); setup mount → remove lifecycle restored the stock tree`)
 rmSync(work, { recursive: true, force: true })
+rmSync(observerDir, { recursive: true, force: true })
