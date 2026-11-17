@@ -40,11 +40,25 @@ jobs:
           node-version: 22
           registry-url: https://registry.npmjs.org
 
+      - name: Install pnpm
+        # Keep the release gate on the same pnpm path as ci.yml: with .npmrc's
+        # legacy-peer-deps, npm skips peer resolution and leaves
+        # @deepseek-ai/dsh-error (a non-optional peer of dsh-llm) out of the
+        # tree, so the test step dies with ERR_MODULE_NOT_FOUND on a tag.
+        uses: pnpm/action-setup@v6
+        with:
+          # pnpm-lock.yaml is committed and MUST be regenerated in the same
+          # commit as any package.json change — CI installs frozen and fails
+          # fast otherwise (the dsh-tui-pi v1.0.5 lesson).
+          version: 10
+
       - name: Install dependencies
-        run: npm install --no-audit --no-fund
+        run: pnpm install --frozen-lockfile
 
       - name: Build & Check & Test
-        run: npm run build --if-present && npm run check --if-present && npm test
+        # No build script exists in package.json; the gate is check + test,
+        # same as ci.yml. pnpm has no --if-present, so it is omitted here.
+        run: pnpm check && pnpm test
 
       - name: Stamp package.json to the tag version
         # The tag is the single source of truth for what gets published (the
