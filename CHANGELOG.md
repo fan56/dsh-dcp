@@ -3,7 +3,7 @@
 All notable changes to dsh-dcp are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
-## [Unreleased]
+## [0.14.2] - 2026-11-17
 
 ### Added
 - npm packaged upgrade regression test (pnpm 11 strictDepBuilds, see dsh-subagent-registry#10).
